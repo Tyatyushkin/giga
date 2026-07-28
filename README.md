@@ -25,6 +25,12 @@ input/requirements/*.md
         └── blockers = 0 ──────────────────► that journey is done, the rest keep going
         │
         ▼
+  ❓ [optional] pytest generation — orchestrator asks if you want pytest tests
+        │
+        ├── yes ──► pytest-test-writer per PASS journey → tests/test_<J>.py
+        └── no  ──► continue to coverage gate
+        │
+        ▼
   ❓ coverage gate — requirements no case checks, questions still open
         │
         ▼
@@ -51,7 +57,7 @@ Put your own requirements into `input/requirements/` and delete the sample.
 
 | Command | What it does |
 |---|---|
-| `/e2e:run [path] [--max N] [--parallel N] [--unit journey\|area] [--journey J01] [--yes] [--no-ask]` | Full run: analyse → parallel design/review loops → report |
+| `/e2e:run [path] [--max N] [--parallel N] [--unit journey\|area] [--journey J01] [--yes] [--no-ask] [--generate-pytest]` | Full run: analyse → parallel design/review loops → [optional pytest generation] → report |
 | `/e2e:analyze [path]` | Journey plans only, then the gap report and the gap question |
 | `/e2e:design J01 [J02 …] [review-path]` | Test cases; several journey ids run in parallel |
 | `/e2e:review J01 [J02 …] [N]` | Review only, one critic per journey, in parallel |

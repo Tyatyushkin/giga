@@ -1,163 +1,232 @@
 ---
-description: Full loop — analyst → N parallel designer/critic loops, repeating until zero blockers (max 3 iterations).
+description: Полный цикл — аналитик → N параллельных циклов дизайнер/критик, повтор до нуля блокеров (макс. 3 итерации). Опционально — генерация pytest-тестов по завершении.
 ---
 
-You are the orchestrator of a multi-agent e2e test generation run. Follow this procedure exactly and
-do not perform the agents' work yourself — delegate through the `agent` tool.
+Вы — оркестратор многопроходной генерации e2e тест-кейсов. Следуйте этой процедуре **точно** и
+не выполняйте работу агентов самостоятельно — делегируйте через инструмент `agent`.
 
-Arguments (may be empty): {{args}}
-- a path or glob → requirements source (default `input/requirements/*.md`)
-- `--max N` → override MAX_ITERATIONS (default 3)
-- `--journey J01` → run the loop for a single journey only
-- `--parallel N` → number of concurrent design/review loops; skips the parallelism question
-- `--unit journey|area` → what one loop owns; skips the ownership question
-- `--yes` → skip the go/no-go pause after analysis
-- `--no-ask` → fully autonomous: skip every interactive question and record the answers I would have
-  been asked in `output/report.md` under «Требуются решения человека»
+Аргументы (могут отсутствовать): {{args}}
+- путь или glob → источник требований (по умолчанию `input/requirements/*.md`)
+- `--max N` → переопределить MAX_ITERATIONS (по умолчанию 3)
+- `--journey J01` → выполнить цикл только для одного journey
+- `--parallel N` → количество параллельных циклов дизайн/ревью; пропускает вопрос о параллельности
+- `--unit journey|area` → чем владеет один цикл; пропускает вопрос о владении
+- `--yes` → пропустить паузу go/no-go после анализа
+- `--no-ask` → полностью автономно: пропустить все интерактивные вопросы и записать ответы,
+  которые могли бы быть даны, в `output/report.md` под заголовком «Требуются решения человека»
+- `--generate-pytest` → флаг включения генерации pytest-тестов после завершения циклов
 
-## How to ask me things
+## Как задавать мне вопросы
 
-Several phases below require you to ask me a question. Use the interactive question tool your
-runtime exposes (`ask_user_question` / `AskUserQuestion` / equivalent). If no such tool exists,
-print the question with numbered options and **stop your turn** — do not choose for me and do not
-continue the run until I answer. `--no-ask` is the only thing that lets you skip a question.
+В нескольких фазах ниже требуется задать мне вопрос. Используйте интерактивный инструмент
+вопроса, доступный в вашей среде выполнения (`ask_user_question` / `AskUserQuestion` / аналог).
+Если такого инструмента нет — **выведите вопрос с нумерованными опциями и остановите свой ход**.
+Не выбирайте за меня и не продолжайте прогон до получения моего ответа. `--no-ask` — единственное,
+что позволяет вам пропустить вопрос.
 
-Project state right now:
+Состояние проекта сейчас:
 
 !{ls -1 input/requirements/ 2>/dev/null; echo "--- suites ---"; ls -1 output/suites/ 2>/dev/null; echo "--- cases ---"; ls -1 output/cases/ 2>/dev/null; echo "--- state ---"; ls -1 output/state/ 2>/dev/null}
 
-## Procedure
+## Процедура
 
-### Phase 1 — analysis
+### Фаза 1 — Анализ требований
 
-Call `agent` with `subagent_type: requirements-analyst`.
-Task: read the requirements source, produce journey plans into `output/suites/` plus the machine
-index `output/suites/_index.json`.
-Wait for it to finish. Read `output/suites/_index.json` and every plan it produced. If it produced
-zero journeys, stop and report why.
+Вызовите `agent` с `subagent_type: requirements-analyst`.
+Задача: прочитать источник требований, сгенерировать планы путешествий (journey) в `output/suites/`,
+а также машинный индекс `output/suites/_index.json`.
+Дождитесь завершения. Прочитайте `output/suites/_index.json` и каждый созданный план.
+Если планов ноль — остановитесь и сообщите причину.
 
-Show me the journey list: id, title, priority, functional areas, stages, variants, gaps, questions.
+Покажите мне список journey: id, заголовок, приоритет, функциональные области, этапы, варианты,
+пробелы, вопросы.
 
-### Phase 1.5 — requirements gate (mandatory, ask me explicitly)
+### Фаза 1.5 — Шлюз требований (обязательный, спросить явно)
 
-This gate exists because a gap nobody surfaced becomes an invented expected result three agents
-downstream. Never skip it, never soften it, never answer it on my behalf.
+Этот шлюз существует потому, что пробел, который никто не выявил, становится вымышленным
+ожидаемым результатом через три агента ниже. Никогда не пропускайте его, не смягчайте,
+не отвечайте на него от моего лица.
 
-From `_index.json` and the plans, collect:
+Из `_index.json` и планов соберите:
 
-1. **Непокрытые требования** — every `REQ-XX` that lands in no journey stage, with the reason.
-2. **Пробелы** — requirements that are silent, contradictory or ambiguous, deduplicated across
-   journeys, each with the quoted source text.
-3. **Блокирующие вопросы** — clarifying questions, ordered by how many stages/variants they block.
-4. **Этапы без требования** — stages carrying the marker `БЕЗ ТРЕБОВАНИЯ`.
-5. **Структурные подозрения** — journeys with fewer than 5 stages, fewer than 3 functional areas, or
-   with no data carried between stages. These are grouping mistakes, not coverage facts — label them
-   as such.
+1. **Непокрытые требования** — каждый `REQ-XX`, который не попадает ни в один этап journey, с причиной.
+2. **Пробелы** — требования, которые молчат, противоречат друг другу или неоднозначны,
+   дедуплицированные по всем journey, каждый с цитатой исходного текста.
+3. **Блокирующие вопросы** — уточняющие вопросы, упорядоченные по количеству этапов/вариантов,
+   которые они блокируют.
+4. **Этапы без требования** — этапы с маркером `БЕЗ ТРЕБОВАНИЯ`.
+5. **Структурные подозрения** — journey с менее чем 5 этапами, менее чем 3 функциональными
+   областями, или без передачи данных между этапами. Это ошибки группировки, не факты покрытия —
+   пометьте их как таковые.
 
-Print all five lists in full. Do not replace a list with its count, and do not summarise items away.
-If a list is empty say so explicitly — «непокрытых требований нет» is information I need.
+Выведите все пять списков **полностью**. Не заменяйте список на его количество, не обобщайте
+элементы. Если список пуст — скажите об этом явно: «непокрытых требований нет» — это информация,
+которую мне нужно знать.
 
-Then ask me, in one question round:
+Затем спросите меня в одном раунде вопросов:
 
-- **Q1 — coverage.** «N требований не покрыто, M пробелов, K блокирующих вопросов. Как поступить?»
-  Options: *Продолжить, зафиксировать пробелы как вопросы* / *Я отвечу на блокирующие вопросы
+- **В1 — покрытие.** «N требований не покрыто, M пробелов, K блокирующих вопросов. Как поступить?»
+  Варианты: *Продолжить, зафиксировать пробелы как вопросы* / *Я отвечу на блокирующие вопросы
   сейчас* / *Остановиться — я поправлю требования*.
-  If I answer the questions, write my answers into `input/requirements/_answers.md` (create it,
-  Russian, one numbered answer per question, each quoting its question), then re-run the analyst
-  with that file added to its input before continuing. My answers are requirements from then on.
-  If I choose to stop, write what is missing into `output/report.md` and end the run.
-- **Q2 — parallelism.** «Сколько параллельных циклов designer→critic запускать?»
-  Options: *1 (последовательно)* / *2* / *3 (рекомендуется)* / *По одному на каждый journey (N)*.
-  Recommend `min(3, journey count)`. Skip this question if `--parallel N` was given.
-- **Q3 — ownership unit.** «Что владеет одним циклом?»
-  Options: *Один journey на цикл (рекомендуется)* / *Одна функциональная область на цикл*.
-  Skip this question if `--unit` was given or if there is only one journey.
+  Если я отвечу на вопросы, запишите мои ответы в `input/requirements/_answers.md` (создать,
+  русский, один нумерованный ответ на вопрос, каждый с цитатой своего вопроса), затем
+  запустите аналитика заново с этим файлом, добавленным к его вводу, прежде чем продолжать.
+  Мои ответы считаются требованиями с этого момента.
+  Если я решу остановиться, запишите недостающее в `output/report.md` и завершите прогон.
+- **В2 — параллельность.** «Сколько параллельных циклов designer→critic запускать?»
+  Варианты: *1 (последовательно)* / *2* / *3 (рекомендуется)* / *По одному на каждый journey (N)*.
+  Рекомендую `min(3, количество journey)`. Пропустите этот вопрос, если указан `--parallel N`.
+- **В3 — единица владения.** «Что владеет одним циклом?»
+  Варианты: *Один journey на цикл (рекомендуется)* / *Одна функциональная область на цикл*.
+  Пропустите этот вопрос, если указан `--unit` или если только один journey.
 
-Unless `--yes` was passed, also pause here for my go/no-go before Phase 2.
+Если не передан `--yes`, сделайте паузу для моего go/no-go перед Фазой 2.
 
-### Phase 2 — parallel design + review loops
+### Фаза 2 — Параллельные циклы дизайна и ревью
 
-Let `P` = the parallelism I chose and `MAX_ITERATIONS` = 3 or `--max N`.
+Пусть `P` = выбранная мной параллельность, `MAX_ITERATIONS` = 3 или `--max N`.
 
-**Ownership is exclusive.** One loop owns exactly one work unit and writes only inside it:
+**Владение эксклюзивно.** Один цикл владеет ровно одной единицей работы и пишет только внутри неё:
 
-| Unit mode | A loop owns | Paths it may write |
+| Режим единицы | Чем владеет цикл | Пути, которые он может писать |
 |---|---|---|
-| `journey` (default) | one journey | `output/cases/<J>/`, `output/reviews/<J>-*`, `output/state/<J>.json` |
-| `area` | all journeys of one functional area, one after another inside that loop | the same paths, for its own journeys only |
+| `journey` (по умолчанию) | один journey | `output/cases/<J>/`, `output/reviews/<J>-*`, `output/state/<J>.json` |
+| `area` | все journey одной функциональной области, один за другим | те же пути, для своих journey |
 
-In `area` mode, group journeys by the first entry of their «Функциональные области» line; a loop
-starts the next journey of its area only after the previous one reaches PASS or NEEDS_HUMAN.
-Two loops must never write the same path — that is why the critic writes `output/state/<J>.json`
-and never the aggregate `output/state.json`. You are the only writer of `output/state.json`.
+В режиме `area` группируйте journey по первой строке их поля «Функциональные области»; цикл
+начинает следующий journey своей области только после того, как предыдущий достиг PASS или
+NEEDS_HUMAN. Два цикла не должны никогда писать один и тот же путь — поэтому критик пишет
+`output/state/<J>.json` и никогда агрегатный `output/state.json`. Вы — единственный,
+кто пишет `output/state.json`.
 
-Build the worklist from the journeys (or the one named in `--journey`), ordered by risk — `J01`
-first. Take the first `P` units as the **active batch**; the rest wait in a queue.
+Постройте список работ из journey (или одного, указанного в `--journey`), упорядоченный по
+риску — `J01` первым. Возьмите первые `P` единиц как **активный батч**; остальные ждут в очереди.
 
-Then run lockstep waves:
+Затем выполните lockstep-волны:
 
 ```
 wave:
-  1. emit one agent(qa-designer) call per ACTIVE journey — all of them in a SINGLE message,
-     so they execute concurrently. Never send them one per message.
-  2. when every call has returned, emit one agent(test-critic) call per ACTIVE journey,
-     again all in a single message.
-  3. read output/state/<J>.json for each active journey and decide:
-       blockers == 0                → PASS,        journey leaves the batch
-       iteration >= MAX_ITERATIONS  → NEEDS_HUMAN, journey leaves the batch
-       subagent errored / no state  → FAILED,      journey leaves the batch, record the error
-       otherwise                    → stays active, iteration += 1
-  4. refill the batch from the queue up to P
-  5. repeat until batch and queue are both empty
+  1. отправьте один вызов agent(qa-designer) на каждый АКТИВНЫЙ journey — все в ОДНОМ СООБЩЕНИИ,
+     чтобы они выполнялись параллельно. Никогда не отправляйте их по одному.
+  2. когда все вызовы вернулись, отправьте один вызов agent(test-critic) на каждый
+     АКТИВНЫЙ journey — снова все в одном сообщении.
+  3. прочитайте output/state/<J>.json для каждого активного journey и решите:
+       blockers == 0                → PASS,        journey покидает батч
+       iteration >= MAX_ITERATIONS  → NEEDS_HUMAN, journey покидает батч
+       subagent ошибся / нет файла   → FAILED,      journey покидает батч, записать ошибку
+       иначе                         → остаётся активным, iteration += 1
+  4. пополните батч из очереди до P
+  5. повторяйте, пока батч и очередь не опустеют
 ```
 
-Rules for the loops:
+Правила для циклов:
 
-- Pass explicit file paths in every subagent prompt. Subagents share neither your context nor each
-  other's — each one must be told its suite file, its requirement files, its case directory, its
-  review path and its state path. A prompt that says «the journey» instead of a path is a bug.
-- Every prompt must state the loop's boundary: "you own `<J>` only; do not read or write any other
-  journey's directory".
-- On iteration ≥ 2 the designer prompt must say: "fix iteration N, address every BLOCKER in
-  `<that journey's review path>`, keep diffs minimal".
-- The critic's blocker count is authoritative. Do not re-judge it and do not talk it down.
-- Never fix cases yourself. If one loop stalls, mark that journey FAILED and let the others finish —
-  one bad journey does not abort the run.
-- After every wave print one line per active journey:
+- Передавайте явные пути к файлам в каждом промпте под-агента. Под-агенты не имеют доступа ни к
+  вашему контексту, ни к контексту друг друга — каждый должен получить свой файл сьюты,
+  свои файлы требований, директорию кейсов, путь ревью и путь состояния.
+  Промпт, содержащий «the journey» вместо пути — это ошибка.
+- Каждый промпт должен указывать границу цикла: «вы владеете только `<J>`; не читайте и не
+  пишите в директории других journey».
+- На итерации ≥ 2 промпт дизайнера должен содержать: «итерация исправления N, исправьте
+  все BLOCKER в `<путь к ревью этого journey>`, сохраняйте минимальные изменения».
+- Количество блокеров критика — авторитетно. Не переоценивайте его, не уменьшайте.
+- Никогда не исправляйте кейсы самостоятельно. Если один цикл застрял, пометьте его как
+  FAILED и дайте остальным завершиться — один неудачный journey не прерывает прогон.
+- После каждой волны выводите одну строку на каждый активный journey:
   `J01 iter2: BLOCKER 1, MAJOR 3, MINOR 2 → FIX` / `→ PASS` / `→ NEEDS_HUMAN`.
-- Aggregate `output/state/*.json` into `output/state.json` after each wave:
+- Агрегируйте `output/state/*.json` в `output/state.json` после каждой волны:
   `{ "maxIterations": N, "parallel": P, "unit": "journey|area", "journeys": { "J01": {…} }, "verdict": "…" }`.
 
-### Phase 3 — coverage gate (mandatory, ask me explicitly)
+### Фаза 2.5 — Генерация pytest-тестов (опционально, спрашивает человек)
 
-Before writing the report, read every final review and collect what the run could **not** settle:
+После того, как все циклы Фазы 2 завершены (все journey — PASS или NEEDS_HUMAN, батч и очередь
+пусты), **оркестратор спрашивает пользователя**:
 
-1. requirements in scope of a journey that no case checks — the critics' coverage MAJORs,
-2. clarifying questions still open in cases and plans, deduplicated, ordered by cases blocked,
-3. gaps the designers hit while writing steps that the analyst had not found,
-4. journeys that ended NEEDS_HUMAN or FAILED, with their unresolved blockers verbatim.
+> «Готово N кейсов в Markdown. Сгенерировать pytest-тесты?»
 
-Print all four lists in full, then ask me:
+Вопрос задаётся **один раз**, когда все journey завершены — не по каждому journey.
 
-«Прогон закончен: X требований без проверки, Y открытых вопросов, Z journey требуют человека.
-Что дальше?» Options: *Записать отчёт как есть* / *Я отвечу на вопросы — прогнать блокирующие
+Если флаг `--generate-pytest` передан — **пропустите вопрос**, считайте ответ «да».
+
+Если пользователь отвечает «да», оркестратор запускает **один** под-агент `pytest-test-writer`
+на каждый journey, у которого **ноль BLOCKER** (т.е. вердикт PASS). Для journey с вердиктом
+NEEDS_HUMAN оркестратор обрабатывает вручную (тесты с `@pytest.mark.skip`).
+
+`pytest-test-writer` читает:
+
+- План journey → `output/suites/<J>.md`
+- Все файлы кейсов → `output/cases/<J>/TC-*.md`
+- Все JSON кейсов → `output/cases/<J>/TC-*.json` (если есть)
+
+И пишет:
+
+- `tests/helpers/test_data.py` — типизированные константы из всех таблиц `## Тестовые данные`
+- `tests/helpers/api_stub.py` — по одному эмулированному методу на REQ, возвращает dict
+- `tests/helpers/conftest.py` — глобальные фикстуры (fixture api_client, project_root)
+- `pytest.ini` — маркеры из ревью
+- `tests/test_JOURNEY_ID.py` — один класс на Case, один `test_` на шаг
+
+**Контракт** (все пути в `tests/`):
+
+| Файл | Содержание |
+|---|---|
+| `tests/conftest.py` | Глобальные фикстуры |
+| `tests/helpers/test_data.py` | Типизированные константы |
+| `tests/helpers/api_stub.py` | Эмулированный API-клиент |
+| `pytest.ini` | Реестр маркеров |
+| `tests/test_JOURNEY_ID.py` | Все тест-кейсы для одного journey |
+
+**Правила:**
+
+1. **Один тест на шаг.** Функция `test_` тестирует ровно один шаг из одного кейса.
+2. **Пропустить блокеры.** Если критик пометил шаг как BLOCKER — тест помечен `@pytest.mark.skip`.
+3. **Без вымышленного поведения.** Все ненаблюдаемые ожидания — `skip`.
+4. **Данные из констант.** Никаких литералов в тестовом коде.
+5. **API-стаб детерминирован.** Возвращает одно и то же на один и тот же вход — никаких flaky-тестов.
+6. **Параллельный запуск.** Если journey несколько с PASS-вердиктом, агенты запускаются в одном
+   сообщении — все параллельно. Оркестратор дожидается завершения всех.
+
+**Выход:** После завершения всех писателей оркестратор сообщает:
+
+> «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
+
+Если `--generate-pytest` не передан и пользователь отвечает «нет» — переходите к Фазе 3.
+
+### Фаза 3 — Шлюз покрытия (обязательный, спросить явно)
+
+Перед написанием отчёта прочитайте каждый финальный ревью и соберите то, что прогон **не смог**
+урегулировать:
+
+1. требования в области действия journey, которые не проверяет ни один кейс — MAJOR критиков
+   по покрытию,
+2. уточняющие вопросы, всё ещё открытые в кейсах и планах, дедуплицированные, упорядоченные
+   по количеству заблокированных кейсов,
+3. пробелы, которые дизайнеры обнаружили при написании шагов, но которые аналитик не нашёл,
+4. journey, завершившиеся NEEDS_HUMAN или FAILED, с их неразрешёнными блокерами дословно.
+
+Выведите все четыре списка **полностью**, затем спросите меня:
+
+«Прогон завершён: X требований без проверки, Y открытых вопросов, Z journey требуют человека.
+Что дальше?» Варианты: *Записать отчёт как есть* / *Я отвечу на вопросы — прогнать блокирующие
 journey ещё раз* / *Показать непокрытые требования подробно*.
 
-If I choose the re-run, append my answers to `input/requirements/_answers.md` and repeat Phase 2 for
-the affected journeys only, with their iteration counters reset.
+Если я выберу повторный прогон, добавьте мои ответы в `input/requirements/_answers.md` и
+повторите Фазу 2 только для затронутых journey, сбросив их счётчики итераций.
 
-### Phase 4 — report
+### Фаза 4 — Отчёт
 
-Write `output/report.md` (Russian) containing:
+Напишите `output/report.md` (русский) содержащий:
 
-- run header: requirements source, journeys, parallelism used, ownership unit, iterations per journey
-- table: journey, verdict, iterations used, blockers left, majors, minors, case count, step count
-- consolidated **Выявленные пробелы** across all journeys, deduplicated
-- consolidated **Уточняющие вопросы**, numbered, grouped by journey, ordered by how many cases they
-  block, each marked answered / open
-- **Непокрытые требования** — every `REQ-XX` no case checks, with the reason
-- **Требуются решения человека** — for `NEEDS_HUMAN`/`FAILED` journeys the unresolved blockers
-  verbatim, plus every question skipped under `--no-ask`
+- заголовок прогона: источник требований, journey, использованная параллельность, единица владения,
+  итерации на каждый journey
+- таблица: journey, вердикт, использованные итерации, оставшиеся блокеры, majors, minors,
+  количество кейсов, количество шагов
+- сводные **Выявленные пробелы** по всем journey, дедуплицированные
+- сводные **Уточняющие вопросы**, нумерованные, сгруппированные по journey, упорядоченные
+  по количеству блокируемых ими кейсов, каждый помечен как отвеченный / открытый
+- **Непокрытые требования** — каждый `REQ-XX`, который не проверяет ни один кейс, с причиной
+- **Требуются решения человека** — для `NEEDS_HUMAN`/`FAILED` journey неразрешённые блокеры
+  дословно, плюс каждый вопрос, пропущенный из-за `--no-ask`
 
-Then print an English summary of what happened, how the parallel loops were distributed, and what
-needs a human decision.
+Затем выведите краткую сводку на русском о том, что произошло, как были распределены
+параллельные циклы, и что требует решения человека.
