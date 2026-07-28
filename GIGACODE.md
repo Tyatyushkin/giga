@@ -4,14 +4,23 @@ This project turns product requirements into **connected end-to-end test suites*
 three subagents inside Qwen Code:
 
 ```
-requirements  →  [requirements-analyst]  →  suite plans (journeys)
+requirements  →  [requirements-analyst]  →  suite plans (journeys) + _index.json
                         ↓
-                 [qa-designer]  →  test cases (Markdown + JSON, Russian)
+              requirements gate: the human is shown every gap, every uncovered REQ,
+              every blocking question, and chooses how many loops run in parallel
                         ↓
-                 [test-critic]  →  review report (BLOCKER / MAJOR / MINOR)
+   ┌────────────────────┼────────────────────┐        P loops, one per journey/area,
+   ▼                    ▼                    ▼        running concurrently
+ [qa-designer J01]   [qa-designer J02]   [qa-designer J03]
+   ▼                    ▼                    ▼
+ [test-critic J01]   [test-critic J02]   [test-critic J03]  → output/state/<J>.json
+   │                    │                    │
+   └── blockers > 0 and iteration < MAX_ITERATIONS ──→ back to that journey's designer
+       blockers = 0 ──→ that journey is DONE, the others keep running
                         ↓
-        blockers > 0 and iteration < MAX_ITERATIONS ──→ back to qa-designer
-        blockers = 0 ──→ DONE
+              coverage gate: the human is shown what the run could not settle
+                        ↓
+                     output/report.md
 ```
 
 ## Directory contract
@@ -19,12 +28,20 @@ requirements  →  [requirements-analyst]  →  suite plans (journeys)
 | Path | Owner | Content |
 |---|---|---|
 | `input/requirements/*.md` | human | source requirements |
+| `input/requirements/_answers.md` | human, written by the orchestrator | answers to clarifying questions; ranks as a requirement |
 | `output/suites/<JOURNEY_ID>.md` | requirements-analyst | journey / suite plan |
+| `output/suites/_index.json` | requirements-analyst | machine index: journeys, areas, gaps, questions, uncovered REQ |
 | `output/cases/<JOURNEY_ID>/<CASE_ID>.md` | qa-designer | test case, Markdown (primary) |
 | `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | qa-designer | same case, machine-readable |
 | `output/reviews/<JOURNEY_ID>-iter<N>.md` | test-critic | review + fix list |
-| `output/state.json` | orchestrator | loop state (iteration, blockers, verdict) |
+| `output/state/<JOURNEY_ID>.json` | test-critic | that journey's loop state — one writer per file |
+| `output/state.json` | orchestrator | aggregate snapshot across journeys |
 | `output/report.md` | orchestrator | final run summary |
+
+**One writer per path.** Parallel loops make this a correctness rule, not a convention: a designer
+writes only its own `output/cases/<JOURNEY_ID>/`, a critic only its own review and
+`output/state/<JOURNEY_ID>.json`, and only the orchestrator writes `output/state.json` and
+`output/report.md`. Any file two agents could write concurrently is a bug in the prompt.
 
 ## Non-negotiable rules (apply to every agent)
 
@@ -43,14 +60,33 @@ requirements  →  [requirements-analyst]  →  suite plans (journeys)
    (`REQ-XX`). A step with no anchor must be justified as an obvious UI navigation step.
 7. **Reusability.** Nothing in the templates or agent prompts may hardcode the «Звук» domain.
    The domain lives only in `input/requirements/`.
+8. **Journey isolation.** A design/review loop owns exactly one journey (or, in `area` mode, one
+   functional area) and reads and writes nothing outside it. Plans must therefore be self-sufficient:
+   no cross-references between journeys, no shared fixtures created by another journey's steps.
+9. **Gaps are shown to the human, not absorbed.** Uncovered requirements, contradictions and blocking
+   questions are surfaced as explicit lists with items — never as a count, never buried in a file the
+   human has to go find. The orchestrator asks before designing and again before reporting.
 
 ## Loop control
 
 - `MAX_ITERATIONS = 3` (override with `--max N` argument to `/e2e:run`).
-- Loop exits when the critic reports **zero BLOCKERs**. MAJOR/MINOR findings are recorded in the
-  review and in the final report but do not block.
-- If blockers remain after `MAX_ITERATIONS`, stop and mark the journey `NEEDS_HUMAN` in
-  `output/report.md` with the unresolved list.
+- Each journey iterates independently. A journey exits its loop when its critic reports **zero
+  BLOCKERs**. MAJOR/MINOR findings are recorded in the review and in the final report but do not block.
+- If blockers remain after `MAX_ITERATIONS`, that journey stops and is marked `NEEDS_HUMAN` in
+  `output/report.md` with the unresolved list. Other journeys keep running.
+- A journey whose subagent errors or writes no state is `FAILED` — recorded, not fatal to the run.
+
+## Parallelism
+
+- The analyst runs once, over all requirements — journeys can only be found by looking at everything.
+- After the requirements gate, the human chooses `P`, the number of concurrent design/review loops
+  (`--parallel N` to skip the question; default recommendation `min(3, journeys)`), and the ownership
+  unit (`--unit journey|area`).
+- The orchestrator dispatches a wave by emitting `P` `agent` calls **in a single message**; agents in
+  one wave run concurrently and share no context. Every prompt therefore carries explicit paths and
+  an explicit ownership boundary.
+- Waves are lockstep: all designers of a wave finish, then all critics of that wave run, then the
+  orchestrator reads `output/state/*.json`, drops finished journeys, and refills from the queue.
 
 ## Deterministic gate
 

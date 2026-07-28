@@ -22,6 +22,9 @@ invent product behaviour.
 ## Input
 
 - Requirement files passed to you (default: `input/requirements/*.md`).
+- `input/requirements/_answers.md` if it exists — the human's answers to earlier clarifying
+  questions. Treat every answer there as a requirement of equal standing with the source files, and
+  remove the gap and question it resolves.
 - Format contract: `docs/format.md`. Project rules: `QWEN.md`.
 
 ## Step 0 — index the requirements
@@ -46,6 +49,10 @@ Rules:
   the grouping is wrong — regroup.
 - Cover requirements exhaustively: every `REQ-XX` lands in at least one journey stage, or in the
   «не покрыто» list at the end of the plan with the reason.
+- **Journeys are worked on in parallel, one agent per journey, and those agents never see each
+  other.** So every plan must be self-sufficient: it repeats the requirement index rows it needs,
+  never says «как в J02», and never depends on data another journey creates. If two journeys need
+  the same fixture, each describes it in its own «Начальное состояние».
 
 ## Step 2 — for each journey, write the plan
 
@@ -70,6 +77,48 @@ Mandatory content:
 9. **Уточняющие вопросы** — numbered, addressed to product, each one blocking a specific stage or
    variant. A question is good only if a different answer changes the test.
 
+## Step 3 — write the machine index
+
+The orchestrator dispatches the parallel loops from this file and uses it to ask the human about
+missing requirements, so it must be exact and complete. Write `output/suites/_index.json`:
+
+```json
+{
+  "requirementsSource": ["input/requirements/<file>.md"],
+  "reqIndex": [{ "id": "REQ-01", "text": "…", "source": "<file>.md § раздел" }],
+  "journeys": [
+    {
+      "id": "J01-<slug>",
+      "plan": "output/suites/J01-<slug>.md",
+      "title": "…",
+      "priority": "Критический",
+      "areas": ["<область 1>", "<область 2>", "<область 3>"],
+      "primaryArea": "<область 1>",
+      "stages": 7,
+      "variants": ["TC-J01-01", "TC-J01-02"],
+      "reqs": ["REQ-01", "REQ-04"],
+      "stagesWithoutReq": 0,
+      "gaps": 2,
+      "questions": 3
+    }
+  ],
+  "uncoveredReqs": [{ "id": "REQ-12", "reason": "поведение не определено" }],
+  "gaps": [{ "id": "G-01", "journey": "J01-<slug>", "what": "…", "quote": "…" }],
+  "questions": [
+    { "id": "Q-01", "journey": "J01-<slug>", "question": "…", "blocks": ["этап 4", "TC-J01-02"], "severity": "blocking" }
+  ]
+}
+```
+
+Rules for the index:
+
+- `journeys[].plan` must be the real path you wrote — the orchestrator passes it to subagents verbatim.
+- Every gap and question in a plan appears here, with a stable id, and vice versa. No silent drops:
+  this file is what the human is shown before any test case is written.
+- `severity` is `blocking` when a different answer would change a test, `advisory` otherwise.
+- If a journey has fewer than 5 stages, fewer than 3 areas, or no data carried between stages, say so
+  in a `"warnings"` array on that journey instead of quietly shipping it.
+
 ## Hard rules
 
 - **Never invent.** If requirements do not define what happens, it becomes a gap and a question,
@@ -83,6 +132,16 @@ Mandatory content:
 
 ## Output
 
-For each journey: one file `output/suites/<JOURNEY_ID>.md`.
-Then print a short English summary: journeys created, count of stages, count of variants,
-count of gaps, count of unresolved questions, and any `REQ-XX` left uncovered.
+For each journey: one file `output/suites/<JOURNEY_ID>.md`. Plus `output/suites/_index.json`.
+
+Then print an English summary the orchestrator can turn into a question for the human without
+re-reading everything:
+
+- journeys created, with stage / variant counts and the exact plan path of each
+- **every uncovered `REQ-XX` with its reason** — listed, not counted
+- **every blocking question**, ordered by how many stages it blocks
+- gaps found, and any journey you had to mark with a `warnings` entry
+
+If the requirements are too thin to build a single valid journey, do not pad them into one. Write no
+plan, put everything into `_index.json` under `uncoveredReqs` / `gaps` / `questions`, and say plainly
+that the requirements are insufficient and what is missing.

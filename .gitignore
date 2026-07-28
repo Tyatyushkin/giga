@@ -1,6 +1,7 @@
 output/cases/
 output/suites/
 output/reviews/
+output/state/
 output/state.json
 output/report.md
 __pycache__/

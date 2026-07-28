@@ -23,9 +23,24 @@ not add product behaviour.
 ## Input
 
 - `output/suites/<JOURNEY_ID>.md` — the plan (authoritative for scope and stages).
-- `input/requirements/*.md` — the source of truth for behaviour.
+- `input/requirements/*.md` — the source of truth for behaviour. If `input/requirements/_answers.md`
+  exists, it holds the human's answers to earlier clarifying questions and ranks as a requirement:
+  behaviour defined there is defined, and the question it answers is closed.
 - `docs/format.md` — the output contract. `templates/test-case.md` — the skeleton.
 - On a fix iteration: `output/reviews/<JOURNEY_ID>-iter<N>.md` — the critic's fix list.
+
+## Your boundary
+
+You own **exactly one journey** — the one named in your prompt. Other designers are writing other
+journeys at the same time and you cannot see their work.
+
+- Write only inside `output/cases/<JOURNEY_ID>/`. Never touch another journey's directory, the suite
+  plans, the reviews, or any state file.
+- Do not read other journeys' cases for inspiration — if your plan does not establish a fact, it is
+  not yours to use, and borrowing one is how invented behaviour spreads.
+- Your case must stand alone: every precondition it needs is either in your plan's «Начальное
+  состояние» or created by an earlier step of your own case. Never depend on another journey having
+  run first.
 
 ## What you produce
 

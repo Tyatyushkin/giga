@@ -1,28 +1,39 @@
-# E2E Test Case Factory — Qwen Code project
+# E2E Test Case Factory — Gigacode project
 
-Three subagents in a loop turn product requirements into connected end-to-end test suites in the
-mandatory Russian format: an analyst finds the journeys, a QA designer writes the cases, a critic
-compares them back against the requirements and sends fixes until nothing blocking is left.
+Three subagents turn product requirements into connected end-to-end test suites in the mandatory
+Russian format: an analyst finds the journeys, then one design→review loop per journey runs — several
+of them **in parallel**, as many as you choose — until nothing blocking is left. You are asked twice
+about what the requirements do not say: before any case is written, and before the report.
 
 ```
 input/requirements/*.md
         │
         ▼
-[requirements-analyst] ──► output/suites/J01-….md        journeys, stages, state transitions, gaps
+[requirements-analyst] ──► output/suites/J01-….md + _index.json   journeys, stages, gaps
         │
         ▼
-[qa-designer] ──────────► output/cases/J01-…/TC-J01-00.md + .json
+  ❓ requirements gate — you see every uncovered REQ, gap and blocking question,
+     and choose how many loops run in parallel and what one loop owns
+        │
+        ├──────────────────┬──────────────────┐   P concurrent loops, one journey each
+        ▼                  ▼                  ▼
+[qa-designer J01]   [qa-designer J02]   [qa-designer J03]  ──► output/cases/J0N-…/
+        ▼                  ▼                  ▼
+[test-critic J01]   [test-critic J02]   [test-critic J03]  ──► output/reviews/, output/state/J0N.json
+        │                  │                  │
+        ├── blockers > 0 and iteration < 3 ──► back to that journey's designer
+        └── blockers = 0 ──────────────────► that journey is done, the rest keep going
         │
         ▼
-[test-critic] ──────────► output/reviews/J01-…-iter1.md   BLOCKER / MAJOR / MINOR + fix list
+  ❓ coverage gate — requirements no case checks, questions still open
         │
-        ├── blockers > 0 and iteration < 3 ──► back to qa-designer with the review
-        └── blockers = 0 ──────────────────► output/report.md
+        ▼
+   output/report.md
 ```
 
 ## Requirements
 
-- Gigacode
+- Gigacode CLI (subagents + Markdown custom commands)
 - Python 3.9+ for the linter (standard library only)
 
 ## Quick start
@@ -40,24 +51,56 @@ Put your own requirements into `input/requirements/` and delete the sample.
 
 | Command | What it does |
 |---|---|
-| `/e2e:run [path] [--max N] [--journey J01] [--yes]` | Full loop: analyse → design → review → fix → report |
-| `/e2e:analyze [path]` | Journey plans only |
-| `/e2e:design J01 [review-path]` | Test cases for one journey, or a fix iteration |
-| `/e2e:review J01 [N]` | Review only, produces the fix list and verdict |
-| `/e2e:status` | Current artefacts, last verdict, open questions, linter output |
+| `/e2e:run [path] [--max N] [--parallel N] [--unit journey\|area] [--journey J01] [--yes] [--no-ask]` | Full run: analyse → parallel design/review loops → report |
+| `/e2e:analyze [path]` | Journey plans only, then the gap report and the gap question |
+| `/e2e:design J01 [J02 …] [review-path]` | Test cases; several journey ids run in parallel |
+| `/e2e:review J01 [J02 …] [N]` | Review only, one critic per journey, in parallel |
+| `/e2e:status` | Current artefacts, per-journey verdicts, open questions, linter output |
 
-The loop pauses after analysis for your confirmation unless you pass `--yes`.
+## Parallel loops
+
+The analyst runs once — journeys can only be found by looking at all the requirements at once. After
+that, each journey gets its own designer→critic loop, and the loops run concurrently.
+
+You decide how many. `/e2e:run` asks:
+
+- **how many parallel loops** — 1, 2, 3, or one per journey (`--parallel N` answers it in advance)
+- **what one loop owns** — one journey, or one functional area with its journeys done in sequence
+  (`--unit journey|area`)
+
+A loop is exclusive: it reads and writes only its own journey's suite plan, case directory, reviews
+and `output/state/<JOURNEY_ID>.json`. Nothing is shared, so nothing races — the orchestrator alone
+writes the aggregate `output/state.json`. Journeys finish independently: one hitting `NEEDS_HUMAN`
+after three iterations does not hold up the others.
+
+## Being asked about missing requirements
+
+Silence in the requirements is the failure mode this project is built around, so it is escalated to
+you rather than absorbed:
+
+- **After analysis** you get the full lists — uncovered `REQ-XX`, contradictions and ambiguities with
+  the conflicting text quoted, blocking questions ordered by how many stages they block, stages with
+  no requirement anchor, and journeys whose shape looks like a grouping mistake. Items, never counts.
+  You choose: proceed and record the gaps, answer the questions now, or stop and fix the requirements.
+- **Answering now** writes `input/requirements/_answers.md` and re-runs the analyst with it. From
+  that point every agent treats your answers as requirements, so a case built on them is no longer
+  "invented behaviour".
+- **After the loops** you get what the run could not settle — requirements no case checks, questions
+  still open, journeys needing a human — and can answer and re-run just those journeys.
+
+`--yes` skips only the go/no-go pause. `--no-ask` makes the run fully autonomous and dumps every
+question it would have asked into `output/report.md` under «Требуются решения человека».
 
 ## Layout
 
 ```
-.qwen/agents/         requirements-analyst.md, qa-designer.md, test-critic.md
-.qwen/commands/e2e/   run.md, analyze.md, design.md, review.md, status.md
-QWEN.md               project context loaded into every session
+.gigacode/agents/         requirements-analyst.md, qa-designer.md, test-critic.md
+.gigacode/commands/e2e/   run.md, analyze.md, design.md, review.md, status.md
+GIGACODE.md               project context loaded into every session
 docs/                 format.md, quality-criteria.md, critic-rubric.md, examples.md
 templates/            suite-plan.md, test-case.md, test-case.json, review-report.md
-input/requirements/   your source requirements (sample «Звук» included)
-output/               suites/, cases/, reviews/, state.json, report.md
+input/requirements/   your source requirements (sample «Звук» included) + _answers.md when you answer
+output/               suites/, cases/, reviews/, state/<journey>.json, state.json, report.md
 scripts/              validate_cases.py — deterministic linter
 examples/             a fully worked journey plan + case, useful as a reference and smoke test
 ```
@@ -88,7 +131,13 @@ Exit code 1 means blockers are present.
 - **Requirements are the only source of truth.** Silence in the requirements produces a gap and a
   question, never a plausible-sounding expected result.
 - **Files, not context.** Agents hand off through disk, so context loss between iterations cannot
-  silently drop a stage.
+  silently drop a stage. It is also what makes the loops parallelisable: one writer per path, no
+  shared mutable state, so concurrent loops cannot clobber each other.
+- **One loop, one journey.** A loop that owned two journeys would start borrowing facts between them
+  — which is exactly how invented behaviour spreads. Isolation is a correctness property here, not a
+  scheduling detail.
+- **Missing requirements are your decision, not the model's.** The run stops and asks rather than
+  guessing, both before writing cases and before reporting. Answers you give become requirements.
 - **Domain-free templates.** «Звук» exists only in `input/requirements/`. Point the project at other
   requirements and nothing else changes.
 
@@ -98,4 +147,4 @@ Exit code 1 means blockers are present.
 2. If the target team's case format differs, edit `docs/format.md`, `templates/test-case.md` and the
    section list at the top of `scripts/validate_cases.py` — the agents read the contract, they do not
    hardcode it.
-3. Nothing in `.qwen/agents/` needs to change.
+3. Nothing in `.gigacode/agents/` needs to change.
