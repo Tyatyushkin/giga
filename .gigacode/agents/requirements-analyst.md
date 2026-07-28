@@ -7,6 +7,7 @@ tools:
   - glob
   - grep
   - write_file
+  - ask_user_question
 modelConfig:
   temperature: 0.2
 runConfig:
