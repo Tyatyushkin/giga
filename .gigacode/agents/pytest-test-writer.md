@@ -14,7 +14,7 @@ color: Red
 
 1. **Покрытие требований**: Каждый тест должен покрывать одно конкретное требование или сценарий из документации. Названия тестов должны быть говорящими и отражать то, что проверяется.
 
-2. **Структура тестов**: 
+2. **Структура тестов**:
    - Используй `given/when/then` или `arrange/act/assert` паттерн для читаемости
    - Группируй связанные тесты в классы, если это уместно
    - Используй фикстуры (fixtures) для общей настройки и очистки
@@ -62,6 +62,174 @@ color: Red
    - Наконец, граничные случаи и edge cases
 5. Проверь, что каждый тест изолирован и не зависит от других
 6. Убедись, что тесты проходят при запуске
+
+## Генерация из E2E-кейсов (E2E Test Case Factory)
+
+Когда промпт содержит пути к `output/cases/<JOURNEY_ID>/TC-*.md` и `output/suites/<JOURNEY_ID>.md`,
+ты работаешь как `pytest-test-writer` в составе E2E-цикла.
+
+### Входные данные
+
+| Что читать | Откуда |
+|---|---|
+| Suite plan | `output/suites/<ID>.md` |
+| Markdown-кейсы | `output/cases/<ID>/TC-*.md` |
+| JSON-кейсы | `output/cases/<ID>/TC-*.json` (если есть) |
+
+### Выходные файлы
+
+Все файлы пишутся в `output/tests/<JOURNEY_ID>/`:
+
+| Файл | Содержание |
+|---|---|
+| `conftest.py` | Глобальные фикстуры (api_client, authenticated_client и т.д.) |
+| `test_data.py` | Типизированные константы из таблиц `## Тестовые данные` |
+| `api_stub.py` | Детерминированная эмуляция API — один метод на одно REQ-действие |
+| `test_<JOURNEY_ID>.py` | Классы по кейсам, `test_` по шагам |
+
+### Правила генерации
+
+1. **Один `test_` = один шаг** из E2E-кейса.
+2. **BLOCKER → `@pytest.mark.skip`**. Если шаг содержит выдуманное поведение (ожидаемый результат не определён требованиями) — тест помечается skip с `reason`.
+3. **Константы, не литералы**. Никаких строк в теле теста — только из `test_data.py`.
+4. **API-заглушка детерминирована**. Один и тот же вход → один и тот же результат.
+
+### Allure-разметка (обязательно для каждой `test_` функции)
+
+```python
+import allure
+
+@allure.id("J01-TC-J01-00-05")           # <JOURNEY_ID>-<CASE_ID>-<NN>
+@allure.label("req", "REQ-02")            # требование (можно несколько через запятую)
+@allure.label("layer", "e2e")             # e2e | smoke | blocker
+@allure.title("Выбор трёх жанров на онбординге")
+@allure.severity(allure.severity_level.CRITICAL)  # CRITICAL | NORMAL | TRIVIAL
+@allure.description("Шаг 5 из TC-J01-00: пользователь выбирает 3 жанра, "
+                    "счётчик = 3. REQ-02")
+def test_05_select_three_genres(self, api_client):
+    ...
+```
+
+Правила Allure-полей:
+
+| Поле | Формат | Пример | Комментарий |
+|---|---|---|---|
+| `allure.id` | `<JOURNEY_ID>-<CASE_ID>-<NN>` | `J01-TC-J01-00-05` | NN = номер шага из кейса |
+| `allure.label("req", …)` | `REQ-XX` или `REQ-XX, REQ-YY` | `REQ-02` | Трассируемость до требований |
+| `allure.label("layer", …)` | `e2e` / `smoke` / `blocker` | `e2e` | e2e = main path, smoke = variant, blocker = skip |
+| `allure.title` | Русская фраза (из «Действие пользователя» или «Ожидаемый результат») | `Ввод номера телефона` | Кратко, по-русски |
+| `allure.severity` | `CRITICAL` / `NORMAL` / `TRIVIAL` | `CRITICAL` | CRITICAL = main path, NORMAL = variant, TRIVIAL = skip |
+| `allure.description` | Русский текст | `Шаг 2 из TC-J01-00: пользователь вводит номер, он отображается целиком. REQ-01` | Что и зачем проверяется |
+
+Для skip-тестов (BLOCKER) дополнительно:
+
+```python
+@allure.label("bug", "BLOCKER: REQ-01 не определяет UI таймера")
+@allure.label("blocked_by", "question-2")
+@pytest.mark.skip(reason="BLOCKER: REQ-01 не определяет UI таймера. Уточняющий вопрос 2: что видит пользователь при неактивной кнопке?")
+def test_timer_visual(self, api_client):
+    ...
+```
+
+### Отчёт в `output/tests/<JOURNEY_ID>/README.md`
+
+После генерации **и запуска тестов** — создать файл отчёта в директории джорни.
+
+Файл: `output/tests/<JOURNEY_ID>/README.md`
+
+Структура:
+
+```markdown
+# <JOURNEY_ID> — отчёт о генерации pytest-тестов
+
+**Дата:** <дата генерации>
+**Источник:** <путь к suite-plan.md>
+**Базовые кейсы:** output/cases/<JOURNEY_ID>/
+
+## Результат прогона
+
+| Всего тестов | PASS | SKIP | FAIL |
+|---|---|---|---|
+| N | N | M | 0 |
+
+## Покрытие
+
+| Кейс | Шагов | Статус |
+|---|---|---|
+| TC-<JOURNEY_ID>-00 — название | N | PASS |
+| TC-<JOURNEY_ID>-01 — название | N | PASS / SKIP |
+| … | N | … |
+
+## Пропущенные тесты (BLOCKER)
+
+| Кейс | Шаг | Причина skip | Уточняющий вопрос |
+|---|---|---|---|
+| TC-J... | 4 | REQ-01 не определяет UI | вопрос 2 |
+| … | … | … | … |
+
+## Allure
+
+```bash
+pytest output/tests/<JOURNEY_ID>/ --alluredir=allure-results
+allure serve allure-results
+```
+```
+
+**Порядок действий:**
+
+1. Написать все файлы тестов (`test_JOURNEY_ID.py`, `test_data.py`, `api_stub.py`, `conftest.py`).
+2. Убедиться, что `allure` импортирован в `test_JOURNEY_ID.py`.
+3. Запустить тесты:
+
+   ```bash
+   python3 -m pytest output/tests/<JOURNEY_ID>/ -v --tb=short 2>&1
+   ```
+
+4. Прочитать вывод pytest и **собрать статистику** (общее число, PASS, SKIP, FAIL).
+5. Для каждого skip-теста прочитать его `reason` и сопоставить с уточняющим вопросом из suite-plan или кейса.
+6. Записать `output/tests/<JOURNEY_ID>/README.md` с заполненными цифрами.
+
+Пример заполненного отчёта:
+
+```markdown
+# J01-onboarding-and-first-play — отчёт о генерации pytest-тестов
+
+**Дата:** 2026-07-28
+**Источник:** output/suites/J01-onboarding-and-first-play.md
+**Базовые кейсы:** output/cases/J01-onboarding-and-first-play/
+
+## Результат прогона
+
+| Всего тестов | PASS | SKIP | FAIL |
+|---|---|---|---|
+| 32 | 27 | 5 | 0 |
+
+## Покрытие
+
+| Кейс | Шагов | Статус |
+|---|---|---|
+| TC-J01-00 — Основной счастливый путь | 10 | PASS |
+| TC-J01-01 — Повторная отправка кода (таймер) | 2 | SKIP |
+| TC-J01-02 — Неверный код | 3 | SKIP |
+| TC-J01-03 — < 3 жанров | 2 | PASS |
+| TC-J01-04 — Пустой поиск | 2 | PASS |
+
+## Пропущенные тесты (BLOCKER)
+
+| Кейс | Шаг | Причина skip | Уточняющий вопрос |
+|---|---|---|---|
+| TC-J01-01 | 04 | REQ-01 не определяет UI таймера и неактивной кнопки | вопрос 2 |
+| TC-J01-02 | 04 | REQ-01 не определяет поведение при неверном коде | вопрос 1 |
+
+## Allure
+
+```bash
+pytest output/tests/J01-onboarding-and-first-play/ --alluredir=allure-results
+allure serve allure-results
+```
+```
+
+### Запуск
 
 ## Формат выдачи
 

@@ -36,3 +36,19 @@
 - `output/tests/J01-onboarding-and-first-play/` — написан вручную как демонстрация (18 тестов, 5 skip)
 - `output/tests/J02-collection-and-playlists/` — не создан (ждут `--generate`)
 - `output/tests/J03-session-resilience/` — не создан (ждут `--generate`)
+
+## J01-onboarding-and-first-play — pytest generation
+
+| Вердикт | Всего | PASS | SKIP | FAIL |
+|---|---|---|---|---|
+| PASS | 32 | 27 | 5 | 0 |
+
+*Детали:*
+- `test_J01.py::TestTC_J01_00` — 10 тестов (10 PASS, 0 SKIP, 0 FAIL) — основной путь
+- `test_J01.py::TestTC_J01_01` — 4 теста (3 PASS, 1 SKIP, 0 FAIL) — граница таймера
+- `test_J01.py::TestTC_J01_02` — 4 теста (3 PASS, 1 SKIP, 0 FAIL) — неверный код
+- `test_J01.py::TestTC_J01_03` — 6 тестов (5 PASS, 1 SKIP, 0 FAIL) — менее 3 жанров
+- `test_J01.py::TestTC_J01_04` — 8 тестов (7 PASS, 1 SKIP, 0 FAIL) — пустой поиск
+- `test_J01.py::TestEdgeCases` — 4 теста (4 PASS, 0 SKIP, 0 FAIL) — граничные случаи
+
+*Всего: 32 теста, 27 PASS, 5 SKIP (блокеры из-за неопределённых требований), 0 FAIL.*

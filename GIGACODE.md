@@ -160,6 +160,41 @@ journey, у которого **ноль BLOCKER** (т.е. вердикт `PASS`)
 5. **API-стаб детерминирован.** Возвращает одно и то же на одни и те же входные данные — никаких
    flaky-тестов.
 
+<<<<<<< HEAD
 **Выход:** После завершения всех агентов-писателей оркестратор сообщает:
+=======
+**Allure-разметка:** см. `.gigacode/agents/pytest-test-writer.md` — раздел «Allure-разметка».
+
+**Report in `output/tests/README.md`:**
+
+After generation, the agent **appends** a summary to `output/tests/README.md`:
+
+```markdown
+## <JOURNEY_ID> — pytest generation
+
+| Вердикт | Всего | PASS | SKIP | FAIL |
+|---|---|---|---|---|
+| `PASS` | N | N | M | 0 |
+| `NEEDS_HUMAN` | N | N | M | 0 |
+```
+
+- **Всего тестов** — количество `test_` функций
+- **PASS** — тесты, чей expected result определён в REQ
+- **SKIP** — `@pytest.mark.skip` из-за выдуманного поведения (BLOCKER)
+- **FAIL** — 0 (детерминированная эмуляция)
+
+Каждый SKIP содержит ссылку на пробел и номер вопроса из уточняющего списка.
+Пример:
+
+```python
+@pytest.mark.skip(
+    reason="BLOCKER: REQ-01 не определяет UI таймера. "
+           "Уточняющий вопрос 2: что видит пользователь при неактивной кнопке?"
+)
+def test_timer_visual():
+    ...
+```
+**Exit:** After all writer agents finish, the orchestrator reports:
+>>>>>>> 79bf56960b697e9552e967a349fb726f83fcdf55
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
