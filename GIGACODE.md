@@ -107,3 +107,50 @@ Its findings are merged into the review report. Linter exit code 1 = blockers pr
 - `docs/examples.md` — bad → good rewrites for expected results, actions, data, questions
 - `templates/` — copyable skeletons
 - `examples/J01-onboarding-first-play/` — a fully worked plan + case that passes the linter
+
+## Phase 4 — pytest code generation (optional, gated by human)
+
+After the E2E loop finishes (all journeys are `PASS` or `NEEDS_HUMAN`), the orchestrator **asks** the user:
+
+> «Готово N кейсов в Markdown. Сгенерировать pytest-тесты?»
+
+The question is asked **once**, after all journeys are complete — not per-journey.
+If the user answers `yes`, the orchestrator launches **one** `pytest-test-writer` subagent per journey
+that has **zero BLOCKER** (i.e. `PASS` verdict), and the orchestrator handles `NEEDS_HUMAN` journeys
+manually (skipped tests with `@pytest.mark.skip`).
+
+The `pytest-test-writer` agent reads:
+
+- Journey suite plan → `output/suites/<ID>.md`
+- All case files → `output/cases/<ID>/TC-*.md`
+- All case JSON → `output/cases/<ID>/TC-*.json` (if available)
+
+And writes:
+
+- `tests/helpers/test_data.py` — typed constants from every `## Тестовые данные` table
+- `tests/helpers/api_stub.py` — one emulated method per REQ, returns dict
+- `tests/helpers/conftest.py` — global fixtures (api_client fixture, project_root)
+- `pytest.ini` — markers from the review
+- `tests/test_JOURNEY_ID.py` — one class per Case, one `test_` per step
+
+**Contract** (all paths in `tests/`):
+
+| File | Content |
+|---|---|
+| `tests/conftest.py` | Global fixtures |
+| `tests/helpers/test_data.py` | Typed constants |
+| `tests/helpers/api_stub.py` | Emulated API client |
+| `pytest.ini` | Marker registry |
+| `tests/test_JOURNEY_ID.py` | All test cases for one journey |
+
+**Rules:**
+
+1. **One test per step.** A `test_` function tests exactly one step from one case.
+2. **Skip blockers.** If the critic marked a step as BLOCKER, the test is `@pytest.mark.skip`.
+3. **No invented behavior.** All unobservable expectations are `skip`.
+4. **Data from constants.** No literals in test code.
+5. **API stub is deterministic.** Returns the same thing for the same input — no flaky tests.
+
+**Exit:** After all writer agents finish, the orchestrator reports:
+
+> «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
