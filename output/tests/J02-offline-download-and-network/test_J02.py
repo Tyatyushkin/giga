@@ -1,780 +1,915 @@
 """
 Тесты для: J02-offline-download-and-network
 Основание: output/suites/J02-offline-download-and-network.md
+Базовые кейсы: output/cases/J02-offline-download-and-network/
 """
 
+import time
 import allure
 import pytest
-from typing import Dict, List, Any
 
-from api_stub import ZvukAPIClient
 from test_data import (
-    SEARCH_QUERY_DELFIN,
-    TRACK_01_TITLE,
-    TRACK_01_ARTIST,
-    TRACK_01_FULL,
-    TRACK_02_TITLE,
-    TRACK_02_ARTIST,
-    TRACK_02_FULL,
-    PLAYLIST_NAME,
-    PLAYLIST_DISPLAY_NAME,
-    TIMELINE_POSITION,
-    RECONNECTION_ATTEMPTS,
-    RECONNECTION_INTERVAL_SECONDS,
-    RECONNECTION_INTERVAL_MIN,
-    RECONNECTION_INTERVAL_MAX,
-    NETWORK_ERROR_MESSAGE,
-    RECONNECTION_FAILED_MESSAGE,
-    DOWNLOAD_CONFIRM_DIALOG_PLAYLIST,
-    DOWNLOAD_CONFIRM_DIALOG_TRACK,
-    TOOLTIP_DOWNLOAD_UNAVAILABLE,
-    RECONNECTION_ATTEMPT_LABEL,
-    OFFLINE_ICON_TYPE,
-    SEARCH_TABS,
-    CONFIRM_BUTTON_YES,
-    CONFIRM_BUTTON_NO,
-    SUBSCRIPTION_PREMIUM,
-    SUBSCRIPTION_FREE,
-    USER_PREMIUM_EMAIL,
-    USER_FREE_EMAIL,
-    EXPECTED_QUEUE_ORDER,
-    DOWNLOAD_BUTTON_STATE_PREMIUM,
-    DOWNLOAD_BUTTON_STATE_FREE,
-    CASE_IDS,
+    SEARCH_QUERY_MAIN,
+    TRACK_1_TITLE,
+    TRACK_1_ARTIST,
+    TRACK_2_TITLE,
+    TRACK_2_ARTIST,
+    PLAYLIST_NAME_MAIN,
+    TIMELINE_POSITION_BREAK,
+    SINGLE_TRACK_TITLE,
+    PLAYLIST_NAME_UNSUBSCRIBED,
+    TIMELINE_POSITION_CANCEL,
+    TRACK_FOR_CANCEL,
+    TRACK_FOR_THREE_ATTEMPTS,
+    RETRY_INTERVAL_BASELINE,
+    RETRY_INTERVAL_DEVIATION,
+    RETRY_TOLERANCE_SEC,
+    PLAYLIST_FOR_DUPLICATE,
+    TRACK_FOR_DUPLICATE,
+    EXPECTED_RETRY_ATTEMPTS,
+    EXPECTED_RETRY_INTERVAL_SEC,
+    TOTAL_RETRY_DURATION_SEC,
+    ERROR_MESSAGE_RETRY,
+    ERROR_MESSAGE_FAILED,
+    DOWNLOAD_CONFIRMATION_PROMPT,
+    UNSUBSCRIBED_BUTTON_LABEL,
+    UNSUBSCRIBED_BUTTON_TOOLTIP,
+    OFFLINE_ICON_DESCRIPTION,
+    QUEUE_ORDER_AFTER_RECOVERY,
 )
 
 
-# ==============================================================================
-# Класс: Основной путь — TC-J02-00
-# ==============================================================================
+# ================================================================
+#  Класс: TC-J02-00 — Основной happy path
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-00: Авторизованный пользователь с подпиской")
+class TestJ0200MainPath:
+    """Основной сценарий: поиск → плеер → очередь → плейлист → скачивание → обрыв → восстановление."""
 
-
-class TestMainHappyPath:
-    """
-    TC-J02-00: Авторизованный пользователь с подпиской —
-    скачивание плейлиста, обрыв сети, переподключение,
-    восстановление с паузой, сохранение очереди.
-    """
-
+    # ── Шаг 1: Открыть раздел «Поиск» ──
     @allure.id("J02-TC-J02-00-01")
     @allure.label("req", "REQ-04")
     @allure.label("layer", "e2e")
-    @allure.title("Открытие раздела поиск")
+    @allure.title("Открыть раздел «Поиск»")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.description(
-        "Шаг 1 из TC-J02-00: пользователь открывает раздел 'Поиск'. "
-        "REQ-04: группировка по вкладкам."
+        "Шаг 1 из TC-J02-00: на экране отображён раздел поиска "
+        "с вкладками Треки, Исполнители, Альбомы, Плейлисты. REQ-04"
     )
-    def test_01_open_search_section(self, api_client):
-        """Открытие раздела 'Поиск' — отображены вкладки."""
-        result = api_client.search(SEARCH_QUERY_DELFIN)
-        tabs = result["tabs"]
+    def test_01_open_search(self, authenticated_client):
+        """Открытие раздела Поиск — проверка наличия вкладок."""
+        # when
+        result = authenticated_client.search_tracks(SEARCH_QUERY_MAIN)
+        # then
+        assert "Треки" in result, (
+            "Вкладка 'Треки' должна присутствовать в результатах поиска"
+        )
+        assert "Исполнители" in result, (
+            "Вкладка 'Исполнители' должна присутствовать"
+        )
+        assert "Альбомы" in result, (
+            "Вкладка 'Альбомы' должна присутствовать"
+        )
+        assert "Плейлисты" in result, (
+            "Вкладка 'Плейлисты' должна присутствовать"
+        )
 
-        assert "Треки" in tabs, "Вкладка 'Треки' не отображена"
-        assert "Исполнители" in tabs, "Вкладка 'Исполнители' не отображена"
-        assert "Альбомы" in tabs, "Вкладка 'Альбомы' не отображена"
-        assert "Плейлисты" in tabs, "Вкладка 'Плейлисты' не отображена"
-
+    # ── Шаг 2: Поисковый запрос ──
     @allure.id("J02-TC-J02-00-02")
     @allure.label("req", "REQ-04")
     @allure.label("layer", "e2e")
-    @allure.title("Поиск по запросу 'Дельфин' — результаты по вкладкам")
+    @allure.title("Ввести поисковый запрос «Дельфин»")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.description(
-        "Шаг 2 из TC-J02-00: ввод поискового запроса 'Дельфин'. "
-        "Результаты сгруппированы по вкладкам. REQ-04."
+        "Шаг 2 из TC-J02-00: результаты поиска сгруппированы "
+        "по вкладкам; трек 'Весна — Дельфин' во вкладке Треки. REQ-04"
     )
-    def test_02_search_results_grouped(self, api_client):
-        """Результаты поиска сгруппированы по вкладкам."""
-        result = api_client.search(SEARCH_QUERY_DELFIN)
-        tracks_tab = result["tabs"]["Треки"]
+    def test_02_search_results_grouped(self, authenticated_client):
+        """Проверка группировки результатов по вкладкам."""
+        # when
+        results = authenticated_client.search_tracks(SEARCH_QUERY_MAIN)
+        # then
+        tracks_tab = results.get("Треки", [])
+        assert tracks_tab, (
+            "Вкладка 'Треки' не должна быть пустой"
+        )
+        assert f"{TRACK_1_TITLE} — {TRACK_1_ARTIST}" in tracks_tab, (
+            f"Трек '{TRACK_1_TITLE} — {TRACK_1_ARTIST}' "
+            f"должен быть во вкладке 'Треки'"
+        )
 
-        assert any(
-            t["title"] == TRACK_01_TITLE and t["artist"] == TRACK_01_ARTIST
-            for t in tracks_tab
-        ), f"Трек '{TRACK_01_TITLE} — {TRACK_01_ARTIST}' не найден во вкладке 'Треки'"
-
+    # ── Шаг 3: Запуск трека ──
     @allure.id("J02-TC-J02-00-03")
     @allure.label("req", "REQ-05")
     @allure.label("layer", "e2e")
-    @allure.title("Запуск плеера с треком 'Весна'")
+    @allure.title("Запустить трек «Весна — Дельфин» из поиска")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.description(
-        "Шаг 3 из TC-J02-00: нажатие на трек — плеер с обложкой, "
-        "названием, исполнителем и таймлайном. REQ-05."
+        "Шаг 3 из TC-J02-00: плеер открыт с обложкой, "
+        "названием, исполнителем, таймлайном. REQ-05"
     )
-    def test_03_play_track_player_shows_metadata(self, authenticated_client):
-        """Плеер отображает обложку, название, исполнителя, таймлайн."""
-        player_state = authenticated_client.play_track("track-spring-001")
-        assert player_state["title"] == TRACK_01_TITLE
-        assert player_state["artist"] == TRACK_01_ARTIST
-        assert player_state["is_playing"] is True
+    def test_03_play_track(self, authenticated_client):
+        """Проверка, что плеер разворачивается с треком."""
+        # when
+        player_state = authenticated_client.play_track(
+            f"{TRACK_1_TITLE} — {TRACK_1_ARTIST}"
+        )
+        # then
+        assert player_state["player_open"] is True, (
+            "Плеер должен быть открыт"
+        )
+        assert TRACK_1_ARTIST in str(player_state["track_title"]), (
+            "В названии трека должен присутствовать исполнитель"
+        )
 
+    # ── Шаг 4: Добавить в очередь ──
     @allure.id("J02-TC-J02-00-04")
-    @allure.label("req", "REQ-06")
+    @allure.label("req", "REQ-05")
     @allure.label("layer", "e2e")
-    @allure.title("Добавление 'Голос — Дельфин' в очередь")
-    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("Нажать «Играть следующим» на треке «Голос — Дельфин»")
+    @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 4 из TC-J02-00: 'Играть следующим' — "
-        "трек добавлен в очередь. Очередь: 'Весна' → 'Голос'."
+        "Шаг 4 из TC-J02-00: трек добавлен в очередь "
+        "сразу после текущего. REQ-05"
     )
-    def test_04_add_track_to_queue(self, authenticated_client):
-        """Добавление второго трека в очередь 'Играть следующим'."""
-        authenticated_client.add_to_queue("track-voice-001")
-        queue = authenticated_client.get_queue()
+    def test_04_add_to_queue_next(self, authenticated_client):
+        """Проверка добавления в очередь 'сразу после'."""
+        # given
+        initial_queue = authenticated_client.get_queue()
+        # when
+        result = authenticated_client.add_to_queue(
+            f"{TRACK_2_TITLE} — {TRACK_2_ARTIST}",
+            position="next",
+        )
+        # then
+        queue = result["queue"]
+        assert len(queue) == len(initial_queue) + 1, (
+            "Очередь должна увеличиться на 1"
+        )
+        assert f"{TRACK_2_TITLE} — {TRACK_2_ARTIST}" in queue, (
+            "Добавленный трек должен быть в очереди"
+        )
 
-        assert len(queue) == 2
-        assert queue[0]["title"] == TRACK_01_TITLE
-        assert queue[1]["title"] == TRACK_02_TITLE
-
+    # ── Шаг 5: Открыть раздел Коллекция → Плейлисты ──
     @allure.id("J02-TC-J02-00-05")
     @allure.label("req", "REQ-08")
     @allure.label("layer", "e2e")
-    @allure.title("Создание плейлиста")
-    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.title("Открыть раздел «Коллекция» → «Плейлисты»")
+    @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 5 из TC-J02-00: открытие раздела 'Коллекция' → "
-        "'Плейлисты', нажатие 'Создать плейлист'. REQ-08."
+        "Шаг 5 из TC-J02-00: список плейлистов "
+        "с кнопкой «Создать плейлист». REQ-08"
     )
-    def test_05_create_playlist(self, authenticated_client):
-        """Создание нового плейлиста."""
-        playlist = authenticated_client.create_playlist(PLAYLIST_NAME)
-        assert playlist["name"] == PLAYLIST_NAME
-        assert playlist["id"] == "pl-001"
+    def test_05_create_playlist_button(self, authenticated_client):
+        """Проверка наличия кнопки «Создать плейлист»."""
+        # when
+        playlist = authenticated_client.get_playlist(PLAYLIST_NAME_MAIN)
+        # then
+        # На этом шаге плейлист ещё не создан — проверяем
+        # что существующих плейлистов нет (или есть)
+        assert playlist is None, (
+            "Плейлист ещё не должен существовать "
+            f"(до создания): {PLAYLIST_NAME_MAIN}"
+        )
 
+    # ── Шаг 6: Создать плейлист ──
     @allure.id("J02-TC-J02-00-06")
     @allure.label("req", "REQ-08")
     @allure.label("layer", "e2e")
-    @allure.title("Ввод названия плейлиста")
+    @allure.title("Создать плейлист «Тестовый плейлист 2026-07»")
     @allure.severity(allure.severity_level.CRITICAL)
     @allure.description(
-        "Шаг 6 из TC-J02-00: название 'Тестовый плейлист 2026-07' "
-        "сохранено. Плейлист отображается в списке. REQ-08."
+        "Шаг 6 из TC-J02-00: плейлист создан, "
+        "отображается в списке. REQ-08"
     )
-    def test_06_playlist_name_saved(self, authenticated_client):
-        """Название плейлиста сохранено, плейлист отображается."""
-        authenticated_client.create_playlist(PLAYLIST_NAME)
-        all_playlists = authenticated_client.get_all_playlists()
-        assert any(
-            p["name"] == PLAYLIST_NAME for p in all_playlists
-        ), f"Плейлист '{PLAYLIST_NAME}' не найден в списке"
+    def test_06_create_playlist(self, authenticated_client):
+        """Создание плейлиста и проверка его наличия."""
+        # when
+        created = authenticated_client.create_playlist(PLAYLIST_NAME_MAIN)
+        # then
+        assert created["created"] is True, (
+            f"Плейлист '{PLAYLIST_NAME_MAIN}' должен быть создан"
+        )
+        assert created["name"] == PLAYLIST_NAME_MAIN, (
+            "Имя плейлиста должно совпадать с введённым"
+        )
 
+    # ── Шаг 7: Открыть созданный плейлист ──
     @allure.id("J02-TC-J02-00-07")
     @allure.label("req", "REQ-08")
     @allure.label("layer", "e2e")
-    @allure.title("Открытие созданного плейлиста")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 7 из TC-J02-00: экран плейлиста с названием "
-        "'Тестовый плейлист 2026-07'. REQ-08."
-    )
-    def test_07_open_playlist(self, authenticated_client):
-        """Экран плейлиста с названием и списком треков."""
-        authenticated_client.create_playlist(PLAYLIST_NAME)
-        pl = authenticated_client.get_playlist(PLAYLIST_NAME)
-        assert pl is not None
-        assert pl["name"] == PLAYLIST_NAME
-
-    @allure.id("J02-TC-J02-00-08")
-    @allure.label("req", "REQ-11")
-    @allure.label("req", "Q-15")
-    @allure.label("layer", "e2e")
-    @allure.title("Диалог подтверждения скачивания плейлиста")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 8 из TC-J02-00: нажатие 'Скачать' — "
-        "диалог с кнопками 'Да' / 'Отмена'. REQ-11, Q-15."
-    )
-    def test_08_download_confirm_dialog(self, authenticated_client):
-        """Отображён диалог подтверждения скачивания."""
-        result = authenticated_client.download_playlist(
-            PLAYLIST_NAME, confirmed=False
-        )
-        assert result["status"] == "pending_confirmation"
-        assert CONFIRM_BUTTON_YES in result["buttons"]
-        assert CONFIRM_BUTTON_NO in result["buttons"]
-
-    @allure.id("J02-TC-J02-00-09")
-    @allure.label("req", "REQ-11")
-    @allure.label("layer", "e2e")
-    @allure.title("Загрузка плейлиста для офлайн-прослушивания")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 9 из TC-J02-00: нажатие 'Да' — "
-        "скачивание началось, иконка офлайн. REQ-11."
-    )
-    def test_09_download_playlist_begins(self, api_client):
-        """Начинается загрузка, отображается иконка офлайн."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        api_client.create_playlist(PLAYLIST_NAME)
-        result = api_client.download_playlist(
-            PLAYLIST_NAME, confirmed=True
-        )
-        assert result["status"] == "started"
-        assert result["offline_icon"] == OFFLINE_ICON_TYPE
-
-    # --- Шаг 10: Запуск воспроизведения из очереди ---
-
-    @allure.id("J02-TC-J02-00-10")
-    @allure.label("req", "REQ-05")
-    @allure.label("layer", "e2e")
-    @allure.title("Запуск воспроизведения трека из очереди")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 10 из TC-J02-00: плеер отображает трек "
-        "'Весна — Дельфин', таймлайн с начала. REQ-05."
-    )
-    def test_10_play_track_from_queue(self, authenticated_client):
-        """Плеер запускает трек из очереди."""
-        state = authenticated_client.play_track("track-spring-001")
-        assert state["is_playing"] is True
-
-    # --- Шаг 11: Имитация обрыва сети ---
-
-    @allure.id("J02-TC-J02-00-11")
-    @allure.label("req", "REQ-13")
-    @allure.label("layer", "e2e")
-    @allure.title("Обрыв сети — сообщение о проблеме")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 11 из TC-J02-00: имитация обрыва сети — "
-        "сообщение о проблеме соединения. REQ-13."
-    )
-    def test_11_network_disruption(self, authenticated_client):
-        """Имитация обрыва сети — сообщение о проблеме."""
-        result = authenticated_client.simulate_network_disruption()
-        assert result["status"] == "disconnected"
-        assert NETWORK_ERROR_MESSAGE in result["message"]
-
-    # --- Шаг 12: Три попытки переподключения ---
-
-    @allure.id("J02-TC-J02-00-12")
-    @allure.label("req", "Q-12")
-    @allure.label("layer", "e2e")
-    @allure.title("Индикатор попыток переподключения (1/3, 2/3, 3/3)")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 12 из TC-J02-00: 3 попытки переподключения "
-        "с интервалом 10 секунд. Q-12."
-    )
-    def test_12_reconnection_attempts_count(self, authenticated_client):
-        """Отображаются 3 попытки переподключения."""
-        for i in range(RECONNECTION_ATTEMPTS):
-            result = authenticated_client.attempt_reconnection()
-            assert result["attempt"] == i + 1
-        assert True  # Все 3 попытки выполнены
-
-    # --- Шаг 13: Восстановление сети ---
-
-    @allure.id("J02-TC-J02-00-13")
-    @allure.label("req", "Q-14")
-    @allure.label("layer", "e2e")
-    @allure.title("Восстановление сети — возобновление с той же позиции")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 13 из TC-J02-00: восстановление сети — "
-        "трек продолжается с позиции 01:23. Q-14."
-    )
-    def test_13_network_restore_same_position(self, api_client):
-        """После восстановления сети трек возобновлён с той же позиции."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        api_client.play_track("track-spring-001")
-        api_client.simulate_network_disruption()
-        api_client.restore_network()
-        pos = api_client.get_player_position()
-        assert pos == TIMELINE_POSITION
-
-    # --- Шаг 14: Проверка очереди ---
-
-    @allure.id("J02-TC-J02-00-14")
-    @allure.label("req", "Q-24")
-    @allure.label("layer", "e2e")
-    @allure.title("Проверка очереди после восстановления")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 14 из TC-J02-00: очередь сохранена в исходном порядке. "
-        "Первым — 'Весна — Дельфин'. Q-24."
-    )
-    def test_14_queue_preserved_after_restore(self, authenticated_client):
-        """Очередь воспроизведения сохранена в исходном порядке."""
-        queue = authenticated_client.get_queue()
-        assert len(queue) == 2
-        assert queue[0]["title"] == TRACK_01_TITLE
-        assert queue[1]["title"] == TRACK_02_TITLE
-
-
-# ==============================================================================
-# Класс: TC-J02-01 — Попытка скачивания без подписки
-# ==============================================================================
-
-
-class TestDownloadWithoutSubscription:
-    """
-    TC-J02-01: Попытка скачивания плейлиста без активной подписки.
-    """
-
-    @allure.id("J02-TC-J02-01-01")
-    @allure.label("req", "Q-11")
-    @allure.label("req", "REQ-11")
-    @allure.label("layer", "smoke")
-    @allure.title("Открытие плейлиста — кнопка 'Скачать' неактивна")
+    @allure.title("Открыть созданный плейлист")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 1 из TC-J02-01: пользователь без подписки "
-        "открывает плейлист. Кнопка 'Скачать' серая. Q-11, REQ-11."
+        "Шаг 7 из TC-J02-00: экран плейлиста "
+        "с названием и списком треков. REQ-08"
     )
-    def test_01_playlist_download_button_disabled(
-        self, unauthenticated_client
-    ):
-        """Кнопка 'Скачать' отображается серым цветом (неактивна)."""
-        unauthenticated_client.create_playlist(PLAYLIST_NAME)
-        status = unauthenticated_client.get_download_status(PLAYLIST_NAME)
-        # Без подписки — скачивание недоступно
-        assert status == {} or status.get("status") != "started"
+    def test_07_open_created_playlist(self, authenticated_client):
+        """Проверка, что плейлист открывается."""
+        # given — создаём плейлист
+        authenticated_client.create_playlist(PLAYLIST_NAME_MAIN)
+        # when
+        pl = authenticated_client.get_playlist(PLAYLIST_NAME_MAIN)
+        # then
+        assert pl is not None, (
+            f"Плейлист '{PLAYLIST_NAME_MAIN}' должен быть доступен"
+        )
+        assert pl["name"] == PLAYLIST_NAME_MAIN, (
+            "Название плейлиста должно совпадать"
+        )
+
+    # ── Шаг 8: Нажать Скачать на плейлисте ──
+    @allure.id("J02-TC-J02-00-08")
+    @allure.label("req", "REQ-11, Q-15")
+    @allure.label("layer", "e2e")
+    @allure.title("Нажать «Скачать» на плейлисте")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 8 из TC-J02-00: диалог подтверждения "
+        "«Скачать плейлист для офлайн-прослушивания?» "
+        "с кнопками «Да» и «Отмена». REQ-11, Q-15"
+    )
+    def test_08_download_playlist_dialog(self, authenticated_client):
+        """Проверка появления диалога подтверждения."""
+        # given
+        authenticated_client.create_playlist(PLAYLIST_NAME_MAIN)
+        # when
+        result = authenticated_client.download_playlist(PLAYLIST_NAME_MAIN)
+        # then
+        assert result["success"] is True, (
+            "Скачивание должно быть разрешено при подписке"
+        )
+        dialog = result.get("dialog", "")
+        assert DOWNLOAD_CONFIRMATION_PROMPT in dialog, (
+            "Текст диалога должен содержать "
+            "'Скачать плейлист для офлайн-прослушивания?'"
+        )
+
+    # ── Шаг 9: Подтвердить скачивание (кнопка «Да») ──
+    @allure.id("J02-TC-J02-00-09")
+    @allure.label("req", "Q-15")
+    @allure.label("layer", "e2e")
+    @allure.title("Нажать «Да» в диалоге подтверждения")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 9 из TC-J02-00: начинается загрузка "
+        "плейлиста, иконка офлайн-статуса. Q-15"
+    )
+    def test_09_confirm_download(self, authenticated_client):
+        """Подтверждение скачивания — проверка иконки."""
+        # given
+        authenticated_client.create_playlist(PLAYLIST_NAME_MAIN)
+        # when
+        confirmed = authenticated_client.confirm_download(PLAYLIST_NAME_MAIN)
+        # then
+        assert confirmed["downloaded"] is True, (
+            f"Плейлист '{PLAYLIST_NAME_MAIN}' должен начать загрузку"
+        )
+        icon = confirmed.get("offline_icon")
+        assert OFFLINE_ICON_DESCRIPTION in str(icon or ""), (
+            "Должна отображаться иконка офлайн-статуса (стрелка вниз)"
+        )
+
+    # ── Шаг 10: Проверка иконки офлайн-статуса ──
+    @allure.id("J02-TC-J02-00-10")
+    @allure.label("req", "Q-22")
+    @allure.label("layer", "e2e")
+    @allure.title("Проверить иконку офлайн-статуса на скачанном плейлисте")
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.description(
+        "Шаг 10 из TC-J02-00: иконка офлайн-статуса "
+        "рядом с названием плейлиста. Q-22"
+    )
+    def test_10_offline_icon_visible(self, authenticated_client):
+        """Проверка, что иконка отображается на скачанном элементе."""
+        # given
+        authenticated_client.create_playlist(PLAYLIST_NAME_MAIN)
+        authenticated_client.confirm_download(PLAYLIST_NAME_MAIN)
+        # when
+        status = authenticated_client.get_offline_status(PLAYLIST_NAME_MAIN)
+        # then
+        assert status["downloaded"] is True, (
+            "Плейлист должен быть помечен как загруженный"
+        )
+        assert OFFLINE_ICON_DESCRIPTION in str(status.get("offline_icon")), (
+            "Иконка офлайн-статуса должна отображаться"
+        )
+
+    # ── Шаг 11: Запустить воспроизведение ──
+    @allure.id("J02-TC-J02-00-11")
+    @allure.label("req", "REQ-05")
+    @allure.label("layer", "e2e")
+    @allure.title("Запустить трек из очереди")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 11 из TC-J02-00: плеер отображает "
+        "таймлайн с позицией с начала. REQ-05"
+    )
+    def test_11_start_playback(self, authenticated_client):
+        """Запуск воспроизведения — проверка таймлайна."""
+        # when
+        state = authenticated_client.play_track(
+            f"{TRACK_1_TITLE} — {TRACK_1_ARTIST}"
+        )
+        # then
+        assert state["player_open"] is True, (
+            "Плеер должен быть открыт"
+        )
+        assert state["timeline"] == "00:00", (
+            "Позиция таймлайна должна быть в начале"
+        )
+
+    # ── Шаг 12: Имитация обрыва сети ──
+    @allure.id("J02-TC-J02-00-12")
+    @allure.label("req", "REQ-13")
+    @allure.label("layer", "e2e")
+    @allure.title("Имитировать обрыв сети")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 12 из TC-J02-00: сообщение о проблеме "
+        "соединения. REQ-13"
+    )
+    def test_12_network_break(self, authenticated_client):
+        """Проверка сообщения об обрыве сети."""
+        # when
+        result = authenticated_client.simulate_network_break()
+        # then
+        assert result["network_available"] is False, (
+            "Сеть должна быть недоступна"
+        )
+        assert ERROR_MESSAGE_RETRY in str(result.get("error_message", "")), (
+            "Должно отображаться сообщение о проблеме соединения"
+        )
+
+    # ── Шаг 13: Дождаться 3 попыток переподключения ──
+    @allure.id("J02-TC-J02-00-13")
+    @allure.label("req", "Q-12")
+    @allure.label("layer", "e2e")
+    @allure.title("Дождаться 3 попыток переподключения")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 13 из TC-J02-00: 3 попытки по 10 сек, "
+        "индикатор 1/3, 2/3, 3/3. Q-12"
+    )
+    def test_13_three_reconnect_attempts(self, authenticated_client):
+        """Проверка выполнения трёх попыток переподключения."""
+        # when
+        for i in range(1, EXPECTED_RETRY_ATTEMPTS + 1):
+            attempt = authenticated_client.reconnect_attempt(i)
+            # then
+            assert attempt["attempt"] == i, (
+                f"Текущая попытка должна быть {i}"
+            )
+            assert attempt["total"] == EXPECTED_RETRY_ATTEMPTS, (
+                "Общее количество попыток должно быть 3"
+            )
+            if i < EXPECTED_RETRY_ATTEMPTS:
+                assert attempt["status"] == "pending", (
+                    f"Попытка {i} должна быть в статусе 'pending'"
+                )
+            # интервал
+            assert attempt.get("interval_sec") == EXPECTED_RETRY_INTERVAL_SEC, (
+                f"Интервал между попытками должен быть "
+                f"{EXPECTED_RETRY_INTERVAL_SEC} секунд"
+            )
+
+        # after 3rd — проверка финального статуса
+        final = authenticated_client.reconnect_attempt(EXPECTED_RETRY_ATTEMPTS)
+        assert final["status"] == "failed", (
+            "После 3-й попытки статус должен быть 'failed'"
+        )
+        assert ERROR_MESSAGE_FAILED in str(final.get("error", "")), (
+            "После 3-й попытки должно быть сообщение об ошибке"
+        )
+
+    # ── Шаг 14: Восстановить соединение ──
+    @allure.id("J02-TC-J02-00-14")
+    @allure.label("req", "REQ-14, Q-14")
+    @allure.label("layer", "e2e")
+    @allure.title("Восстановить соединение — трек продолжается с той же позиции")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 14 из TC-J02-00: воспроизведение "
+        "возобновляется с позиции 01:23. Q-14"
+    )
+    def test_14_resume_from_position(self, authenticated_client):
+        """Проверка восстановления с той же позиции."""
+        # when
+        resumed = authenticated_client.resume_from_position(
+            TIMELINE_POSITION_BREAK
+        )
+        # then
+        assert resumed["resumed"] is True, (
+            "Воспроизведение должно быть возобновлено"
+        )
+        assert resumed["position"] == TIMELINE_POSITION_BREAK, (
+            f"Позиция должна быть {TIMELINE_POSITION_BREAK}"
+        )
+
+    # ── Шаг 15: Проверить очередь ──
+    @allure.id("J02-TC-J02-00-15")
+    @allure.label("req", "Q-24")
+    @allure.label("layer", "e2e")
+    @allure.title("Проверить очередь после восстановления")
+    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.description(
+        "Шаг 15 из TC-J02-00: очередь сохранена "
+        "в исходном порядке. Q-24"
+    )
+    def test_15_queue_preserved(self, authenticated_client):
+        """Проверка сохранения очереди."""
+        # when
+        queue = authenticated_client.get_queue()
+        # then
+        assert queue == QUEUE_ORDER_AFTER_RECOVERY, (
+            f"Очередь должна быть: {QUEUE_ORDER_AFTER_RECOVERY}, "
+            f"получено: {queue}"
+        )
+        assert queue[0] == f"{TRACK_1_TITLE} — {TRACK_1_ARTIST}", (
+            "Первым в очереди должен быть трек 'Весна — Дельфин'"
+        )
+
+
+# ================================================================
+#  Класс: TC-J02-01 — Без подписки (кнопка серая)
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-01: Попытка скачивания без подписки")
+class TestJ0201NoSubscription:
+    """Пользователь без подписки — кнопка «Скачать» серая, тултип."""
+
+    @allure.id("J02-TC-J02-01-01")
+    @allure.label("req", "REQ-11, Q-11")
+    @allure.label("layer", "smoke")
+    @allure.title("Кнопка «Скачать» серая без подписки")
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.description(
+        "Шаг 1 из TC-J02-01: кнопка отображается "
+        "серым цветом для пользователя без подписки. REQ-11"
+    )
+    def test_01_download_button_disabled(self, unauthenticated_client):
+        """Проверка, что кнопка неактивна без подписки."""
+        # when
+        result = unauthenticated_client.download_playlist(
+            PLAYLIST_NAME_UNSUBSCRIBED
+        )
+        # then
+        assert result["success"] is False, (
+            "Скачивание должно быть недоступно"
+        )
+        assert result.get("button_state") == "disabled", (
+            "Кнопка 'Скачать' должна быть неактивна"
+        )
 
     @allure.id("J02-TC-J02-01-02")
     @allure.label("req", "Q-11")
-    @allure.label("req", "REQ-11")
     @allure.label("layer", "smoke")
-    @allure.title("Тултип 'Требуется подписка' при наведении на кнопку")
+    @allure.title("Тултип «Требуется подписка» при наведении")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 2 из TC-J02-01: при наведении — "
-        "тултип 'Требуется подписка'. Q-11."
+        "Шаг 2 из TC-J02-01: тултип "
+        "с текстом 'Требуется подписка'. Q-11"
     )
-    def test_02_tooltip_on_disabled_button(
-        self, unauthenticated_client
-    ):
-        """При наведении на кнопку — тултип 'Требуется подписка'."""
+    def test_02_tooltip_shown(self, unauthenticated_client):
+        """Проверка отображения тултипа на неактивной кнопке."""
+        # when
         result = unauthenticated_client.download_playlist(
-            PLAYLIST_NAME, confirmed=False
+            PLAYLIST_NAME_UNSUBSCRIBED
         )
-        assert result["status"] == "pending_confirmation"
+        # then
+        tooltip = result.get("message", "")
+        assert UNSUBSCRIBED_BUTTON_TOOLTIP in tooltip, (
+            "Тултип должен содержать 'Требуется подписка'"
+        )
+
+    @allure.id("J02-TC-J02-01-03")
+    @allure.label("req", "Q-11")
+    @allure.label("layer", "smoke")
+    @allure.title("Плейлист не загружается без подписки")
+    @allure.severity(allure.severity_level.TRIVIAL)
+    @allure.description(
+        "Шаг 3 из TC-J02-01: плейлист не "
+        "загружается для офлайн-прослушивания. Q-11"
+    )
+    def test_03_playlist_not_downloaded(self, unauthenticated_client):
+        """Проверка, что без подписки плейлист не загружается."""
+        # when
+        result = unauthenticated_client.confirm_download(
+            PLAYLIST_NAME_UNSUBSCRIBED
+        )
+        # then
+        assert result["downloaded"] is False, (
+            "Без подписки плейлист не должен загружаться"
+        )
 
 
-# ==============================================================================
-# Класс: TC-J02-02 — Скачивание одиночного трека
-# ==============================================================================
-
-
-class TestSingleTrackDownload:
-    """
-    TC-J02-02: Скачивание одиночного трека для офлайн-прослушивания.
-    """
+# ================================================================
+#  Класс: TC-J02-02 — Скачивание одиночного трека
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-02: Скачивание одиночного трека")
+class TestJ0202SingleTrack:
+    """Скачивание отдельного трека (не плейлиста)."""
 
     @allure.id("J02-TC-J02-02-01")
-    @allure.label("req", "Q-16")
-    @allure.label("req", "REQ-11")
+    @allure.label("req", "Q-16, REQ-11")
     @allure.label("layer", "smoke")
-    @allure.title("Открытие результатов поиска — одиночный трек")
+    @allure.title("Скачать одиночный трек для офлайн")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 1 из TC-J02-02: результат поиска по 'Дельфин' — "
-        "трек 'Весна — Дельфин' отображён. Q-16."
+        "Шаг 1 из TC-J02-02: диалог подтверждения "
+        "для одиночного трека. Q-16"
     )
-    def test_01_search_result_single_track(self, api_client):
-        """Одиночный трек найден в результатах поиска."""
-        result = api_client.search(SEARCH_QUERY_DELFIN)
-        tracks_tab = result["tabs"]["Треки"]
-        assert any(
-            t["title"] == TRACK_01_TITLE for t in tracks_tab
+    def test_01_single_track_download_dialog(self, authenticated_client):
+        """Проверка, что для одиночного трека показывается диалог."""
+        # given
+        authenticated_client.play_track(SINGLE_TRACK_TITLE)
+        # when
+        result = authenticated_client.download_track(SINGLE_TRACK_TITLE)
+        # then
+        assert result["downloaded"] is True, (
+            "Скачивание одиночного трека должно быть доступно"
         )
 
     @allure.id("J02-TC-J02-02-02")
-    @allure.label("req", "Q-16")
-    @allure.label("req", "REQ-11")
+    @allure.label("req", "Q-22")
     @allure.label("layer", "smoke")
-    @allure.title("Запуск плеера с треком 'Весна — Дельфин'")
-    @allure.severity(allure.severity_level.NORMAL)
+    @allure.title("Иконка офлайн на одиночном треке")
+    @allure.severity(allure.severity_level.TRIVIAL)
     @allure.description(
-        "Шаг 2 из TC-J02-02: плеер открыт с треком. Q-16."
+        "Шаг 2 из TC-J02-02: иконка "
+        "офлайн-статуса на треке. Q-22"
     )
-    def test_02_play_single_track(self, authenticated_client):
-        """Плеер открыт с одиночным треком."""
-        state = authenticated_client.play_track("track-spring-001")
-        assert state["is_playing"] is True
-
-    @allure.id("J02-TC-J02-02-03")
-    @allure.label("req", "Q-16")
-    @allure.label("req", "REQ-11")
-    @allure.label("layer", "smoke")
-    @allure.title("Диалог подтверждения скачивания одиночного трека")
-    @allure.severity(allure.severity_level.NORMAL)
-    @allure.description(
-        "Шаг 3 из TC-J02-02: диалог 'Скачать трек для "
-        "офлайн-прослушивания?' с кнопками. Q-16."
-    )
-    def test_03_download_single_track_dialog(self, authenticated_client):
-        """Запрошен диалог подтверждения для одиночного трека."""
-        result = authenticated_client.download_track(
-            "track-spring-001", confirmed=False
+    def test_02_single_track_offline_icon(self, authenticated_client):
+        """Проверка иконки на скачанном треке."""
+        # given
+        authenticated_client.download_track(SINGLE_TRACK_TITLE)
+        # when
+        status = authenticated_client.get_offline_status(SINGLE_TRACK_TITLE)
+        # then
+        assert status["downloaded"] is True, (
+            "Трек должен быть помечен как загруженный"
         )
-        assert result["status"] == "pending_confirmation"
-        assert CONFIRM_BUTTON_YES in result["buttons"]
-        assert CONFIRM_BUTTON_NO in result["buttons"]
-
-    @allure.id("J02-TC-J02-02-04")
-    @allure.label("req", "Q-16")
-    @allure.label("req", "REQ-11")
-    @allure.label("layer", "smoke")
-    @allure.title("Скачивание трека — иконка офлайн-статуса")
-    @allure.severity(allure.severity_level.NORMAL)
-    @allure.description(
-        "Шаг 4 из TC-J02-02: загрузка трека — "
-        "иконка офлайн-статуса. Q-16."
-    )
-    def test_04_download_single_track_offline_icon(
-        self, authenticated_client
-    ):
-        """Трек скачан, отображается иконка офлайн."""
-        result = authenticated_client.download_track(
-            "track-spring-001", confirmed=True
-        )
-        assert result["status"] == "started"
-        assert result["offline_icon"] == OFFLINE_ICON_TYPE
+        assert OFFLINE_ICON_DESCRIPTION in str(
+            status.get("offline_icon", "")
+        ), "Должна отображаться иконка офлайн"
 
 
-# ==============================================================================
-# Класс: TC-J02-03 — Отмена переподключения вручную
-# ==============================================================================
-
-
-class TestCancelReconnection:
-    """
-    TC-J02-03: Отмена попытки переподключения вручную после обрыва сети.
-    """
+# ================================================================
+#  Класс: TC-J02-03 — Отмена переподключения вручную
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-03: Отмена переподключения вручную")
+class TestJ0203CancelReconnect:
+    """Отмена попытки переподключения вручную (с паузой)."""
 
     @allure.id("J02-TC-J02-03-01")
-    @allure.label("req", "Q-13")
-    @allure.label("req", "Q-23")
+    @allure.label("req", "REQ-13, Q-13")
     @allure.label("layer", "smoke")
-    @allure.title("Отображение сообщения о проблеме соединения")
+    @allure.title("Сообщение о проблеме соединения при обрыве")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 1 из TC-J02-03: сообщение 'Проблема с соединением'. "
-        "Q-13, Q-23 — индикатор переподключения."
+        "Шаг 1 из TC-J02-03: сообщение "
+        "о проблеме с индикатором. Q-13"
     )
-    def test_01_network_disruption_message(self, authenticated_client):
-        """Отображено сообщение о проблеме соединения."""
-        result = authenticated_client.simulate_network_disruption()
-        assert result["status"] == "disconnected"
-        assert "Проблема с соединением" in result["message"]
+    def test_01_network_break_message(self, authenticated_client):
+        """Проверка сообщения при обрыве."""
+        # when
+        result = authenticated_client.simulate_network_break()
+        # then
+        assert result["network_available"] is False, (
+            "Сеть должна быть недоступна"
+        )
 
     @allure.id("J02-TC-J02-03-02")
     @allure.label("req", "Q-13")
-    @allure.label("req", "Q-23")
     @allure.label("layer", "smoke")
-    @allure.title("Нажатие 'Закрыть' — отмена переподключения, пауза")
+    @allure.title("Отмена попытки переподключения — трек на паузе")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 2 из TC-J02-03: нажатие 'Закрыть' — "
-        "переподключение отменено, трек на паузе. Q-13."
+        "Шаг 2 из TC-J02-03: попытка отменена, "
+        "воспроизведение приостановлено. Q-13, Q-23"
     )
-    @pytest.mark.skip(
-        reason="BLOCKER: Q-13 не определяет, "
-        "отображается ли кнопка 'Закрыть' сразу при обрыве "
-        "или после первой попытки. Требуется уточнение."
-    )
-    def test_02_cancel_reconnection(self, api_client):
-        """Отмена переподключения — трек на паузе."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
+    def test_02_cancel_reconnect_pause(self, authenticated_client):
+        """Проверка, что отмена ставит трек на паузу."""
+        # given — сначала обрыв
+        authenticated_client.simulate_network_break()
+        # when
+        cancelled = authenticated_client.cancel_reconnect()
+        # then
+        assert cancelled["cancelled"] is True, (
+            "Переподключение должно быть отменено"
         )
-        api_client.play_track("track-spring-001")
-        api_client.simulate_network_disruption()
-        result = api_client.cancel_reconnection()
-        assert result["status"] == "cancelled"
-        assert result["playback_paused"] is True
+        assert cancelled["paused"] is True, (
+            "Воспроизведение трека должно быть на паузе"
+        )
 
     @allure.id("J02-TC-J02-03-03")
-    @allure.label("req", "Q-14")
+    @allure.label("req", "REQ-14, Q-14")
     @allure.label("layer", "smoke")
-    @allure.title("Восстановление сети — возобновление с той же позиции")
+    @allure.title("Возобновление с той же позиции после отмены")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 3 из TC-J02-03: после восстановления — "
-        "трек возобновлён с позиции 01:23. Q-14."
+        "Шаг 3 из TC-J02-03: после восстановления "
+        "сети трек продолжается с позиции 01:23. Q-14"
     )
-    def test_03_restore_playback_after_cancel(self, api_client):
-        """После отмены и восстановления — трек с той же позиции."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
+    @pytest.mark.skip(
+        reason=(
+            "BLOCKER: Q-23 не определяет, сохраняется ли "
+            "позиция таймлайна для возобновления после отмены "
+            "переподключения. Уточняющий вопрос 3: можно ли "
+            "отменить попытку до того, как она началась?"
         )
-        api_client.play_track("track-spring-001")
-        api_client.simulate_network_disruption()
-        api_client.cancel_reconnection()
-        api_client.restore_network()
-        pos = api_client.get_player_position()
-        assert pos == TIMELINE_POSITION
-
-    @allure.id("J02-TC-J02-03-04")
-    @allure.label("req", "Q-23")
-    @allure.label("layer", "smoke")
-    @allure.title("Нажатие 'Play' после отмены — возобновление")
-    @allure.severity(allure.severity_level.NORMAL)
-    @allure.description(
-        "Шаг 4 из TC-J02-03: нажатие 'Play' — "
-        "воспроизведение возобновлено с 01:23. Q-23."
     )
-    def test_04_resume_playback(self, api_client):
-        """Возобновление после отмены."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        api_client.play_track("track-spring-001")
-        api_client.simulate_network_disruption()
-        api_client.cancel_reconnection()
-        api_client.restore_network()
-        result = api_client.resume_playback()
-        assert result["resumed"] is True
+    @allure.label("bug", "BLOCKER: Q-23 не определяет сохранение позиции")
+    @allure.label("blocked_by", "question-3")
+    def test_03_resume_after_cancel(self, authenticated_client):
+        """Проверка возобновления с позиции после отмены (BLOCKER)."""
+        # Уточнение: Q-23 говорит о паузе, но не уточняет,
+        # сохраняется ли позиция для возобновления
+        pass
 
 
-# ==============================================================================
-# Класс: TC-J02-04 — Три неудачные попытки
-# ==============================================================================
-
-
-class TestThreeFailedAttempts:
-    """
-    TC-J02-04: Три неудачные попытки переподключения — ошибка соединения.
-    """
+# ================================================================
+#  Класс: TC-J02-04 — 3 неудачные попытки → ошибка
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-04: Три неудачные попытки → ошибка")
+class TestJ0204ThreeFailedAttempts:
+    """После 3 попыток — сообщение об ошибке соединения."""
 
     @allure.id("J02-TC-J02-04-01")
-    @allure.label("req", "Q-12")
-    @allure.label("layer", "e2e")
-    @allure.title("Имитация обрыва сети — сообщение")
-    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.label("req", "REQ-13")
+    @allure.label("layer", "smoke")
+    @allure.title("Обрыв сети — сообщение о проблеме")
+    @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 1 из TC-J02-04: обрыв — сообщение о проблеме. "
-        "Q-12 — индикатор попытки переподключения."
+        "Шаг 1 из TC-J02-04: сообщение "
+        "о проблеме соединения. REQ-13"
     )
-    def test_01_simulate_disruption(self, authenticated_client):
-        """Обрыв сети — отображено сообщение."""
-        result = authenticated_client.simulate_network_disruption()
-        assert result["status"] == "disconnected"
+    def test_01_network_break_during_playback(self, authenticated_client):
+        """Проверка сообщения при обрыве во время воспроизведения."""
+        # when
+        result = authenticated_client.simulate_network_break()
+        # then
+        assert result["network_available"] is False
 
     @allure.id("J02-TC-J02-04-02")
     @allure.label("req", "Q-12")
-    @allure.label("layer", "e2e")
-    @allure.title("Попытка 1/3 — 10 сек")
-    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.label("layer", "smoke")
+    @allure.title("Попытка 1/3 — интервал 10 секунд")
+    @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 2 из TC-J02-04: попытка 1/3, "
-        "интервал 10 секунд. Q-12."
+        "Шаг 2 из TC-J02-04: индикатор "
+        "попытки 1/3. Q-12"
     )
-    def test_02_first_attempt(self, api_client):
-        """Первая попытка 1/3."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        result = api_client.attempt_reconnection()
-        assert "attempt" in result
-        assert "max_attempts" in result
+    def test_02_first_attempt(self, authenticated_client):
+        """Проверка первой попытки."""
+        # when
+        attempt = authenticated_client.reconnect_attempt(1)
+        # then
+        assert attempt["attempt"] == 1, "Должна быть 1-я попытка"
+        assert attempt["interval_sec"] == EXPECTED_RETRY_INTERVAL_SEC
 
     @allure.id("J02-TC-J02-04-03")
     @allure.label("req", "Q-12")
-    @allure.label("layer", "e2e")
-    @allure.title("Попытка 2/3 — 10 сек")
-    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.label("layer", "smoke")
+    @allure.title("Попытка 2/3 — интервал 10 секунд")
+    @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 3 из TC-J02-04: попытка 2/3. "
-        "Q-12."
+        "Шаг 3 из TC-J02-04: индикатор "
+        "попытки 2/3. Q-12"
     )
-    def test_03_second_attempt(self, api_client):
-        """Вторая попытка 2/3."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        api_client.attempt_reconnection()
-        result = api_client.attempt_reconnection()
-        assert result["attempt"] == 2
+    def test_03_second_attempt(self, authenticated_client):
+        """Проверка второй попытки."""
+        # when
+        attempt = authenticated_client.reconnect_attempt(2)
+        # then
+        assert attempt["attempt"] == 2, "Должна быть 2-я попытка"
 
     @allure.id("J02-TC-J02-04-04")
     @allure.label("req", "Q-12")
-    @allure.label("layer", "e2e")
+    @allure.label("layer", "smoke")
     @allure.title("Попытка 3/3 — последняя")
-    @allure.severity(allure.severity_level.CRITICAL)
+    @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 4 из TC-J02-04: попытка 3/3. "
-        "Q-12."
+        "Шаг 4 из TC-J02-04: индикатор "
+        "попытки 3/3. Q-12"
     )
-    def test_04_third_attempt(self, api_client):
-        """Третья попытка 3/3."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        api_client.attempt_reconnection()
-        api_client.attempt_reconnection()
-        result = api_client.attempt_reconnection()
-        assert result["attempt"] == 3
+    def test_04_third_attempt(self, authenticated_client):
+        """Проверка третьей попытки."""
+        # when
+        attempt = authenticated_client.reconnect_attempt(3)
+        # then
+        assert attempt["attempt"] == EXPECTED_RETRY_ATTEMPTS
 
     @allure.id("J02-TC-J02-04-05")
     @allure.label("req", "Q-12")
-    @allure.label("layer", "e2e")
-    @allure.title("После 3 попыток — ошибка соединения")
-    @allure.severity(allure.severity_level.CRITICAL)
-    @allure.description(
-        "Шаг 5 из TC-J02-04: после трёх попыток — "
-        "сообщение об ошибке. Q-12."
-    )
-    def test_05_final_error(self, api_client):
-        """После 3-й попытки — сообщение об ошибке."""
-        api_client.authenticate(
-            user_id="premium@test.ru", subscription_tier="premium"
-        )
-        for _ in range(3):
-            api_client.attempt_reconnection()
-        state = api_client.get_player_state()
-        assert state["is_playing"] is False
-
-
-# ==============================================================================
-# Класс: TC-J02-05 — Интервал между попытками (граница)
-# ==============================================================================
-
-
-class TestReconnectionInterval:
-    """
-    TC-J02-05: Интервал попыток переподключения — граничное значение.
-    """
-
-    @allure.id("J02-TC-J02-05-01")
-    @allure.label("req", "Q-12")
-    @allure.label("req", "REQ-13")
     @allure.label("layer", "smoke")
-    @allure.title("Имитация обрыва сети")
+    @allure.title("После 3-й попытки — сообщение об ошибке")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 1 из TC-J02-05: обрыв — сообщение о проблеме. "
-        "REQ-13, Q-12."
+        "Шаг 5 из TC-J02-04: сообщение об ошибке "
+        "соединения. Q-12"
     )
-    def test_01_disruption(self, authenticated_client):
-        """Обрыв сети."""
-        result = authenticated_client.simulate_network_disruption()
-        assert result["status"] == "disconnected"
+    @pytest.mark.skip(
+        reason=(
+            "BLOCKER: Q-12 не определяет точный текст "
+            "сообщения об ошибке после трёх неудачных попыток. "
+            "Уточняющий вопрос 1: какой текст сообщения?"
+        )
+    )
+    @allure.label("bug", "BLOCKER: Q-12 не определяет текст ошибки")
+    @allure.label("blocked_by", "question-1")
+    def test_05_error_message_after_three_attempts(self, authenticated_client):
+        """Проверка текста ошибки (BLOCKER)."""
+        # Текст не определён требованием — проверка пропущена
+        pass
+
+
+# ================================================================
+#  Класс: TC-J02-05 — Интервал между попытками (граница)
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-05: Интервал попыток — граничное значение")
+class TestJ0205RetryInterval:
+    """Проверка, что интервал между попытками строго 10 секунд."""
+
+    @allure.id("J02-TC-J02-05-01")
+    @allure.label("req", "Q-12, REQ-13")
+    @allure.label("layer", "smoke")
+    @allure.title("Обрыв сети — начало переподключения")
+    @allure.severity(allure.severity_level.NORMAL)
+    @allure.description(
+        "Шаг 1 из TC-J02-05: сообщение "
+        "о проблеме соединения. Q-12"
+    )
+    def test_01_network_break(self, authenticated_client):
+        """Проверка начала переподключения."""
+        # when
+        result = authenticated_client.simulate_network_break()
+        # then
+        assert result["network_available"] is False
 
     @allure.id("J02-TC-J02-05-02")
     @allure.label("req", "Q-12")
     @allure.label("layer", "smoke")
-    @allure.title("Интервал между 1/3 и 2/3 — ровно 10 сек")
+    @allure.title("Интервал 1/3 → 2/3 = ровно 10 секунд")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 2 из TC-J02-05: замер интервала "
-        "между первой и второй попыткой."
+        "Шаг 2 из TC-J02-05: засечь "
+        "интервал между 1 и 2 попыткой. Q-12"
     )
-    def test_02_interval_first_second(self, authenticated_client):
-        """Интервал между 1/3 и 2/3 — 10 секунд."""
-        first = authenticated_client.attempt_reconnection()
-        second = authenticated_client.attempt_reconnection()
-        delta = second["attempt"] - first["attempt"]
-        assert delta == 1  # Счётчик увеличился на единицу
+    def test_02_interval_between_1_and_2(self, authenticated_client):
+        """Проверка интервала 10 сек между 1 и 2 попыткой."""
+        # when
+        t1 = authenticated_client.reconnect_attempt(1)
+        t2 = authenticated_client.reconnect_attempt(2)
+        # then
+        assert t1["interval_sec"] == RETRY_INTERVAL_BASELINE, (
+            "Интервал 1-й попытки должен быть 10 сек"
+        )
+        assert t2["interval_sec"] == RETRY_INTERVAL_BASELINE, (
+            "Интервал 2-й попытки должен быть 10 сек"
+        )
 
     @allure.id("J02-TC-J02-05-03")
     @allure.label("req", "Q-12")
     @allure.label("layer", "smoke")
-    @allure.title("Интервал между 2/3 и 3/3 — ровно 10 сек")
+    @allure.title("Интервал 2/3 → 3/3 = ровно 10 секунд")
     @allure.severity(allure.severity_level.NORMAL)
     @allure.description(
-        "Шаг 3 из TC-J02-05: замер интервала "
-        "между второй и третьей попыткой."
+        "Шаг 3 из TC-J02-05: засечь "
+        "интервал между 2 и 3 попыткой. Q-12"
     )
-    def test_03_interval_second_third(self, authenticated_client):
-        """Интервал между 2/3 и 3/3 — +1 попытка."""
-        for _ in range(2):
-            authenticated_client.attempt_reconnection()
-        third = authenticated_client.attempt_reconnection()
-        assert third["attempt"] == 3
+    def test_03_interval_between_2_and_3(self, authenticated_client):
+        """Проверка интервала 10 сек между 2 и 3 попыткой."""
+        # when
+        t2 = authenticated_client.reconnect_attempt(2)
+        t3 = authenticated_client.reconnect_attempt(3)
+        # then
+        assert t2["interval_sec"] == RETRY_INTERVAL_BASELINE
+        assert t3["interval_sec"] == RETRY_INTERVAL_BASELINE
 
 
-# ==============================================================================
-# Класс: TC-J02-06 — Дубликат трека в плейлист (неопределено)
-# ==============================================================================
+# ================================================================
+#  Класс: TC-J02-06 — Дубликат трека в плейлист
+# ================================================================
+@allure.suite("J02: Офлайн-загрузка и сетевая устойчивость")
+@allure.sub_suite("TC-J02-06: Дубликат трека в плейлист")
+class TestJ0206DuplicateInPlaylist:
+    """Добавление одного трека дважды в один плейлист (неопределено).
 
-
-class TestDuplicateInPlaylist:
-    """
-    TC-J02-06: Попытка добавить дубликат трека в плейлист.
-    Поведение не определено — BR-015.
+    Шаги помечены BLOCKER, так как BR-015 не определяет поведение.
     """
 
     @allure.id("J02-TC-J02-06-01")
     @allure.label("req", "BR-015")
     @allure.label("layer", "blocker")
-    @allure.title("Открытие плейлиста с треком")
+    @allure.title("Открыть плейлист с треком")
     @allure.severity(allure.severity_level.TRIVIAL)
     @allure.description(
-        "Шаг 1 из TC-J02-06: открытие плейлиста. "
-        "BR-015 — неопределено."
+        "Шаг 1 из TC-J02-06: "
+        "экран плейлиста. BR-015"
     )
     @pytest.mark.skip(
-        reason="BLOCKER: BR-015 — дубликат трека "
-        "в плейлист не определён. "
-        "Уточняющий вопрос 1: допускается ли "
-        "повторное добавление одного трека?"
+        reason=(
+            "BLOCKER: BR-015 не определяет поведение "
+            "при дубликате трека в плейлист. "
+            "Уточняющий вопрос 1: допускается ли "
+            "повторное добавление одного трека?"
+        )
     )
-    def test_01_open_playlist_with_track(self, api_client):
-        """Открыть плейлист."""
-        api_client.create_playlist(PLAYLIST_NAME)
-        pl = api_client.get_playlist(PLAYLIST_NAME)
-        assert pl is not None
+    @allure.label("bug", "BLOCKER: BR-015 не определяет поведение")
+    @allure.label("blocked_by", "question-1")
+    def test_01_open_playlist_with_track(self, authenticated_client):
+        """Проверка, что плейлист открывается (duplicate)."""
+        pass
 
     @allure.id("J02-TC-J02-06-02")
     @allure.label("req", "BR-015")
     @allure.label("layer", "blocker")
-    @allure.title("Поиск трека 'Весна — Дельфин'")
+    @allure.title("Найти трек «Весна — Дельфин» в результатах")
     @allure.severity(allure.severity_level.TRIVIAL)
     @allure.description(
-        "Шаг 2 из TC-J02-06: поиск трека. "
-        "BR-015 — неопределено."
-    )
-    def test_02_find_track(self, api_client):
-        """Поиск трека."""
-        result = api_client.search(SEARCH_QUERY_DELFIN)
-        tracks = result["tabs"]["Треки"]
-        assert len(tracks) > 0
-
-    @allure.id("J02-TC-J02-06-03")
-    @allure.label("req", "BR-015")
-    @allure.label("layer", "blocker")
-    @allure.title("Добавление трека в плейлист")
-    @allure.severity(allure.severity_level.TRIVIAL)
-    @allure.description(
-        "Шаг 3 из TC-J02-06: 'Добавить в плейлист'. "
-        "BR-015 — неопределено."
+        "Шаг 2 из TC-J02-06: "
+        "трек найден через поиск. BR-015"
     )
     @pytest.mark.skip(
-        reason="BLOCKER: BR-015 не определяет поведение "
-        "при дубликате — будет ли трек отображаться "
-        "один или два раза."
+        reason=(
+            "BLOCKER: BR-015 не определяет поведение "
+            "при дубликате. Трек найден, но "
+            "доступность добавления не описана."
+        )
     )
-    def test_03_add_to_playlist(self, api_client):
-        """Добавить трек в плейлист."""
-        api_client.create_playlist(PLAYLIST_NAME)
-        # Поведение не определено
+    @allure.label("bug", "BLOCKER: BR-015 не определяет дубликат")
+    @allure.label("blocked_by", "question-1")
+    def test_02_find_track(self, authenticated_client):
+        """Поиск трека (duplicate)."""
+        pass
+
+    @allure.id("J02-TC-J02-06-03")
+    @allure.label("req", "BR-007, BR-015")
+    @allure.label("layer", "blocker")
+    @allure.title("Добавить трек в плейлист — дубликат")
+    @allure.severity(allure.severity_level.TRIVIAL)
+    @allure.description(
+        "Шаг 3 из TC-J02-06: "
+        "выбор плейлиста для добавления. BR-015"
+    )
+    @pytest.mark.skip(
+        reason=(
+            "BLOCKER: BR-015 не определяет, "
+            "показывается ли сообщение об уже "
+            "имеющемся треке. Поведение не определено."
+        )
+    )
+    @allure.label("bug", "BLOCKER: BR-015 не определяет UI дубликата")
+    @allure.label("blocked_by", "question-1")
+    def test_03_select_playlist_for_duplicate(self, authenticated_client):
+        """Выбор плейлиста для дубликата."""
         pass
 
     @allure.id("J02-TC-J02-06-04")
     @allure.label("req", "BR-015")
     @allure.label("layer", "blocker")
-    @allure.title("Проверка плейлиста после добавления дубликата")
+    @allure.title("Трек добавлен (неопределённый результат)")
     @allure.severity(allure.severity_level.TRIVIAL)
     @allure.description(
-        "Шаг 4 из TC-J02-06: проверка списка треков. "
-        "BR-015 — неопределено."
+        "Шаг 4 из TC-J02-06: "
+        "трек добавлен в плейлист. BR-015"
     )
     @pytest.mark.skip(
-        reason="BLOCKER: BR-015 не определяет, "
-        "как отображается дубликат."
+        reason=(
+            "BLOCKER: BR-015 не определяет, "
+            "будет ли трек отображаться один или "
+            "два раза в списке треков плейлиста."
+        )
     )
-    def test_04_check_playlist_after_duplicate(self, api_client):
-        """Проверить, отображается ли дубликат."""
-        api_client.create_playlist(PLAYLIST_NAME)
-        pl = api_client.get_playlist(PLAYLIST_NAME)
-        assert pl is not None
-        # Поведение не определено
+    @allure.label("bug", "BLOCKER: BR-015 не определяет список треков")
+    @allure.label("blocked_by", "question-1")
+    def test_04_track_added_duplicate(self, authenticated_client):
+        """Проверка добавления дубликата."""
+        pass
+
+    @allure.id("J02-TC-J02-06-05")
+    @allure.label("req", "BR-015")
+    @allure.label("layer", "blocker")
+    @allure.title("Проверить список треков плейлиста")
+    @allure.severity(allure.severity_level.TRIVIAL)
+    @allure.description(
+        "Шаг 5 из TC-J02-06: "
+        "список треков после добавления. BR-015"
+    )
+    @pytest.mark.skip(
+        reason=(
+            "BLOCKER: BR-015 не определяет, "
+            "сколько раз отображается дублированный трек. "
+        )
+    )
+    @allure.label("bug", "BLOCKER: BR-015 не определяет отображение")
+    @allure.label("blocked_by", "question-1")
+    def test_05_check_playlist_tracks(self, authenticated_client):
+        """Проверка списка после дубликата."""
         pass

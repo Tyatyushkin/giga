@@ -1,58 +1,76 @@
 """
-conftest.py — глобальные фикстуры для Selenium-тестов J02 (офлайн)
+Глобальные фикстуры для тестового пакета J02-offline-download-and-network.
 
-Основание: требования zvuk.md, zvuk-sample.md, _answers.md
+Предоставляет:
+- api_client — сконфигурированный HTTP-клиент (заглушка)
+- authenticated_client — клиент с активной подпиской Premium
+- unauthenticated_client — клиент без подписки (Free-тариф)
+- network_stable — фикстура стабильного сетевого соединения
+- network_unstable — фикстура с имитацией обрыва сети
 """
 
 import pytest
-import allure
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-
-BASE_URL: str = "https://zvuk.com/"
 
 
 @pytest.fixture(scope="function")
-def driver():
+def api_client():
     """
-    Фикстура Headless Chrome для офлайн-тестов.
-
-    Использует webdriver-manager для автоматической установки ChromeDriver.
-    Окно 1920x1080 для детерминированного рендеринга.
+    Возвращает экземпляр эмулированного API-клиента
+    (ApiStub) с детерминированным поведением.
     """
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+    from api_stub import ApiStub
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
+    return ApiStub()
+
+
+@pytest.fixture(scope="function")
+def authenticated_client(api_client):
+    """
+    Клиент с активной платной подпиской Premium.
+
+    Наследует api_client + pre-устанавливает:
+    - subscription = "premium"
+    - is_authenticated = True
+    - play_queue = ["Весна — Дельфин"]
+    - collection = ["Весна — Дельфин", "Голос — Дельфин"]
+    """
+    api_client._set_subscription("premium")
+    api_client._set_authenticated(True)
+    api_client._set_play_queue(
+        ["Весна — Дельфин", "Голос — Дельфин"]
     )
-    driver.implicitly_wait(5)
-    yield driver
-    driver.quit()
+    return api_client
 
 
 @pytest.fixture(scope="function")
-def base_url() -> str:
-    return BASE_URL
+def unauthenticated_client(api_client):
+    """
+    Клиент без активной подписки (Free-тариф).
+
+    Наследует api_client + pre-устанавливает:
+    - subscription = None / "free"
+    - is_authenticated = True (но подписка отсутствует)
+    """
+    api_client._set_subscription(None)
+    api_client._set_authenticated(True)
+    api_client._set_play_queue([])
+    return api_client
 
 
-# --- Хук для скриншота на FAIL ---
-@pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    outcome = yield
-    report = outcome.get_result()
-    if report.when == "call" and report.failed:
-        if "driver" in item.funcargs:
-            driver = item.funcargs["driver"]
-            allure.attach(
-                driver.get_screenshot_as_png(),
-                name="screenshot_fail",
-                attachment_type=allure.attachment_type.PNG,
-            )
+@pytest.fixture(scope="function")
+def network_stable():
+    """
+    Стабильное сетевое соединение.
+    Возвращает True — сеть доступна.
+    """
+    return True
+
+
+@pytest.fixture(scope="function")
+def network_unstable():
+    """
+    Нестабильное сетевое соединение (обрыв).
+
+    Возвращает False — сеть недоступна.
+    """
+    return False

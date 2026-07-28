@@ -1,7 +1,7 @@
 # E2E Test Case Factory — контекст проекта
 
 Этот проект превращает продуктовые требования в **связанные end-to-end тестовые сценарии** с помощью
-цикла из трёх под-агентов внутри Qwen Code:
+цикла из трёх под-агентов внутри Gigacode:
 
 ```
 требования  →  [requirements-analyst]  →  планы сьют (journey) + _index.json
@@ -35,6 +35,8 @@
 | `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | qa-designer | тот же кейс, машиночитаемый |
 | `output/reviews/<JOURNEY_ID>-iter<N>.md` | test-critic | ревью + список исправлений |
 | `output/state/<JOURNEY_ID>.json` | test-critic | состояние цикла этого journey — один пишущий на файл |
+| `output/gate/questions.json` | `scripts/build_gate_questions.py` | payload вопросов шлюза требований — оркестратор передаёт его в инструмент вопроса дословно |
+| `output/gate/answers.json` | оркестратор (записывает мои ответы) | ответы шлюза; `scripts/gate_check.py` не пускает в Фазу 2 без него |
 | `output/state.json` | оркестратор | агрегированный снимок по всем journey |
 | `output/report.md` | оркестратор | финальная сводка прогона |
 
@@ -160,9 +162,6 @@ journey, у которого **ноль BLOCKER** (т.е. вердикт `PASS`)
 5. **API-стаб детерминирован.** Возвращает одно и то же на одни и те же входные данные — никаких
    flaky-тестов.
 
-<<<<<<< HEAD
-**Выход:** После завершения всех агентов-писателей оркестратор сообщает:
-=======
 **Allure-разметка:** см. `.gigacode/agents/pytest-test-writer.md` — раздел «Allure-разметка».
 
 **Report in `output/tests/README.md`:**
@@ -195,7 +194,6 @@ def test_timer_visual():
     ...
 ```
 **Exit:** After all writer agents finish, the orchestrator reports:
->>>>>>> 79bf56960b697e9552e967a349fb726f83fcdf55
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
 

@@ -26,7 +26,7 @@ invent product behaviour.
 - `input/requirements/_answers.md` if it exists — the human's answers to earlier clarifying
   questions. Treat every answer there as a requirement of equal standing with the source files, and
   remove the gap and question it resolves.
-- Format contract: `docs/format.md`. Project rules: `QWEN.md`.
+- Format contract: `docs/format.md`. Project rules: `GIGACODE.md`.
 
 ## Step 0 — index the requirements
 

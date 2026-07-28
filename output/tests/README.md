@@ -52,3 +52,17 @@
 - `test_J01.py::TestEdgeCases` — 4 теста (4 PASS, 0 SKIP, 0 FAIL) — граничные случаи
 
 *Всего: 32 теста, 27 PASS, 5 SKIP (блокеры из-за неопределённых требований), 0 FAIL.*
+
+## J02-free-limited — pytest generation
+
+| Вердикт | Всего | PASS | SKIP | FAIL |
+|---|---|---|---|---|
+| PASS | 13 | 13 | 0 | 0 |
+
+*Детали:*
+- `test_J02_free_limited.py::TestTC_J02_00_MainHappyPath` — 9 тестов (9 PASS, 0 SKIP, 0 FAIL) — основной счастливый путь
+- `test_J02_free_limited.py::TestTC_J02_01_InvalidSmsCode` — 2 теста (2 PASS, 0 SKIP, 0 FAIL) — неверный код
+- `test_J02_free_limited.py::TestTC_J02_02_EmptySearch` — 1 тест (1 PASS, 0 SKIP, 0 FAIL) — пустой поиск
+- `test_J02_free_limited.py::TestTC_J02_03_SkipLimit` — 1 тест (1 PASS, 0 SKIP, 0 FAIL) — лимит пропусков
+
+*Всего: 13 тестов, 13 PASS, 0 SKIP (все требования определённы), 0 FAIL.*

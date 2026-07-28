@@ -1,377 +1,378 @@
 """
-Детерминированная эмуляция API сервиса «Звук».
+Детерминированная эмуляция API «Звук».
 
-Каждый метод — на одно REQ-действие. Один и тот же вход → один и тот же результат.
+Один метод = одно REQ-действие.
+Один и тот же вход → один и тот же выход.
 """
 
-from typing import Dict, List, Optional, Any
+from __future__ import annotations
+
+import copy
+from typing import Any
 
 
-class ZvukAPIClient:
+class ApiStub:
     """
-    Детерминированный клиент API сервиса «Звук».
-    Не требует реального подключения — все ответы предопределены.
+    Заглушка API-сервиса «Звук».
+
+    Состояние хранится в экземпляре, поэтому каждый
+    ``api_client`` получает независимый изолированный объект.
+
+    Поддерживаемые операции (Reqiurement → method):
+
+    | REQ | Метод | Описание |
+    |-----|-------|----------|
+    | REQ-04 | ``search_tracks(query)`` | Поиск, группировка по вкладкам |
+    | REQ-05 | ``play_track(track_id)`` | Запуск плеера с треком |
+    | REQ-08 | ``create_playlist(name)`` | Создание плейлиста |
+    | REQ-11 | ``download_playlist(…)`` | Скачивание (только при подписке) |
+    | REQ-13 | ``simulate_network_break()`` | Эмуляция обрыва сети |
+    | REQ-14 | ``reconnect()`` | Попытка восстановления соединения |
+    | Q-12 | ``reconnect_attempt(count)`` | N-я попытка переподключения |
+    | Q-13 | ``cancel_reconnect()`` | Отмена вручную |
+    | Q-14 | ``resume_from_position(pos)`` | Возобновление с позиции |
+    | Q-15 | ``confirm_download()`` | Диалог подтверждения |
+    | Q-22 | ``get_offline_icon()`` | Иконка офлайн-статуса |
+    | Q-23 | ``pause_playback()`` | Пауза |
+    | Q-24 | ``get_queue()`` | Получение очереди |
+    | BR-005 | ``playback_controls()`` | Пауза, пропуск, перемотка |
+    | BR-007 | ``playlist_operations()`` | Создание/редактирование плейлиста |
+    | BR-011 | ``subscription_gate()`` | Проверка тарифа |
+    | BR-015 | ``add_to_playlist()`` | Добавление трека в плейлист |
     """
 
     def __init__(self):
-        self._authenticated = False
-        self._user_id: Optional[str] = None
-        self._subscription_tier: Optional[str] = None
-        self._playlists: Dict[str, Any] = {}
-        self._queue: List[Dict[str, Any]] = []
-        self._current_track: Optional[Dict[str, Any]] = None
-        self._network_connected = True
-        self._reconnection_attempts = 0
-        self._download_progress: Dict[str, Any] = {}
+        # ── Внутреннее состояние ──
+        self._subscription: str | None = None
+        self._authenticated: bool = False
+        self._play_queue: list[str] = []
+        self._collection: list[str] = []
+        self._playlists: dict[str, list[str]] = {}
+        self._playlist_downloaded: set[str] = set()
+        self._track_downloaded: set[str] = set()
+        self._current_track: str | None = None
+        self._current_position: str = "00:00"
+        self._network_available: bool = True
+        self._reconnect_attempts: int = 0
+        self._reconnect_cancelled: bool = False
+        self._search_results: dict[str, list[str]] = {}
+        self._player_open: bool = False
 
-    # ------------------------------------------------------------------
-    # Аутентификация и профиль
-    # ------------------------------------------------------------------
+    # ── Сеттеры для фикстур ──
 
-    def reset(self) -> None:
+    def _set_subscription(self, plan: str | None) -> None:
+        self._subscription = plan
+
+    def _set_authenticated(self, val: bool) -> None:
+        self._authenticated = val
+
+    def _set_play_queue(self, queue: list[str]) -> None:
+        self._play_queue = list(queue)
+
+    def _set_collection(self, items: list[str]) -> None:
+        self._collection = list(items)
+
+    # ── REQ-04: Поиск ──
+
+    def search_tracks(self, query: str) -> dict[str, list[str]]:
         """
-        Сбрасывает всё внутреннее состояние.
-        Используется в фикстурах для изоляции тестов.
+        Возвращает детерминированные результаты поиска.
+
+        ``query = "Дельфин"`` → ``{"Треки": ["Весна — Дельфин", …], …}``
+        Любой другой запрос → пустой словарь.
         """
-        self._authenticated = False
-        self._user_id = None
-        self._subscription_tier = None
-        self._playlists = {}
-        self._queue = []
-        self._current_track = None
-        self._network_connected = True
-        self._reconnection_attempts = 0
-        self._download_progress = {}
-
-    def authenticate(self, user_id: str, subscription_tier: str = "premium") -> Dict[str, Any]:
-        """
-        Аутентифицирует пользователя.
-
-        Args:
-            user_id: email или ID пользователя
-            subscription_tier: 'premium' | 'free'
-
-        Returns:
-            Dict с профилем пользователя
-        """
-        self._authenticated = True
-        self._user_id = user_id
-        self._subscription_tier = subscription_tier
-
-        return {
-            "user_id": user_id,
-            "authenticated": True,
-            "subscription_tier": subscription_tier,
-            "subscription_active": subscription_tier == "premium",
-        }
-
-    def is_authenticated(self) -> bool:
-        return self._authenticated
-
-    def get_subscription_tier(self) -> str:
-        return self._subscription_tier or "free"
-
-    # ------------------------------------------------------------------
-    # Поиск
-    # ------------------------------------------------------------------
-
-    def search(self, query: str) -> Dict[str, Any]:
-        """
-        Поиск по сервису.
-
-        Args:
-            query: поисковый запрос
-
-        Returns:
-            Результаты, сгруппированные по вкладкам
-        """
-        return {
-            "query": query,
-            "tabs": {
-                "Треки": [
-                    {"title": "Весна", "artist": "Дельфин"},
-                    {"title": "Голос", "artist": "Дельфин"},
-                ],
-                "Исполнители": [{"name": "Дельфин"}],
+        if query == "Дельфин":
+            self._search_results = {
+                "Треки": ["Весна — Дельфин", "Голос — Дельфин"],
+                "Исполнители": ["Дельфин"],
                 "Альбомы": [],
                 "Плейлисты": [],
-            },
-            "results_count": 2,
-        }
+            }
+        else:
+            self._search_results = {}
+        return copy.deepcopy(self._search_results)
 
-    # ------------------------------------------------------------------
-    # Плеер
-    # ------------------------------------------------------------------
+    # ── REQ-05: Плеер ──
 
-    def play_track(self, track_id: str) -> Dict[str, Any]:
+    def play_track(self, track_title: str) -> dict[str, Any]:
         """
-        Запускает воспроизведение трека.
+        Запускает плеер с треком.
 
-        Args:
-            track_id: идентификатор трека
-
-        Returns:
-            Информация о плеере
+        ``track_title = "Весна — Дельфин"`` → плеер открыт,
+        обложка, название, исполнитель, таймлайн.
         """
-        self._current_track = {
-            "id": track_id,
-            "title": "Весна",
+        self._player_open = True
+        self._current_track = track_title
+        self._current_position = "00:00"
+        return {
+            "player_open": True,
+            "track_title": track_title,
             "artist": "Дельфин",
-            "album_cover": "cover_spring_delfin.png",
-            "is_playing": True,
+            "timeline": "00:00",
         }
-        return self._current_track
 
-    def get_player_state(self) -> Dict[str, Any]:
-        """
-        Текущее состояние плеера.
-        """
-        if not self._current_track:
-            return {"is_playing": False}
+    def get_player_state(self) -> dict[str, Any]:
+        """Текущее состояние плеера."""
         return {
-            **self._current_track,
-            "current_position": "01:23",
-            "duration_seconds": 180,
-            "progress_percent": 46.0,
+            "player_open": self._player_open,
+            "current_track": self._current_track,
+            "position": self._current_position,
         }
 
-    def get_player_position(self) -> str:
-        """Возвращает текущую позицию таймлайна."""
-        return "01:23"
+    # ── REQ-08: Создание плейлиста ──
 
-    def pause_playback(self) -> Dict[str, Any]:
+    def create_playlist(self, name: str) -> dict[str, Any]:
         """
-        Ставит воспроизведение на паузу.
+        Создаёт плейлист (макс 100 символов).
+
+        ``name`` сохраняется в ``self._playlists``.
         """
-        if self._current_track:
-            self._current_track["is_playing"] = False
-        return {"paused": True, "position": "01:23"}
+        self._playlists[name] = []
+        return {"created": True, "name": name, "tracks": []}
 
-    def resume_playback(self) -> Dict[str, Any]:
-        """
-        Возобновляет воспроизведение.
-        """
-        if self._current_track:
-            self._current_track["is_playing"] = True
-        return {"resumed": True, "position": "01:23"}
-
-    # ------------------------------------------------------------------
-    # Очередь
-    # ------------------------------------------------------------------
-
-    def add_to_queue(self, track_id: str, position: str = "next") -> Dict[str, Any]:
-        """
-        Добавляет трек в очередь воспроизведения.
-
-        Args:
-            track_id: идентификатор трека
-            position: 'next' — сразу после текущего
-
-        Returns:
-            Обновлённая очередь
-        """
-        self._queue.append(
-            {
-                "track_id": track_id,
-                "title": "Голос",
-                "artist": "Дельфин",
-                "position": len(self._queue) + 1,
-            }
-        )
-        return {"queue": self._queue, "updated": True}
-
-    def get_queue(self) -> List[Dict[str, Any]]:
-        """
-        Возвращает текущую очередь воспроизведения.
-        """
-        return [
-            {"title": "Весна", "artist": "Дельфин", "position": 1},
-            {"title": "Голос", "artist": "Дельфин", "position": 2},
-        ]
-
-    # ------------------------------------------------------------------
-    # Плейлисты
-    # ------------------------------------------------------------------
-
-    def create_playlist(self, name: str) -> Dict[str, Any]:
-        """
-        Создаёт новый плейлист.
-
-        Args:
-            name: название плейлиста (до 100 символов)
-
-        Returns:
-            Созданный плейлист
-        """
-        playlist = {
-            "id": "pl-001",
-            "name": name,
-            "created_at": "2026-07-28T10:00:00Z",
-            "track_count": 0,
-            "tracks": [],
-            "offline_available": False,
-        }
-        self._playlists[name] = playlist
-        return playlist
-
-    def get_playlist(self, name: str) -> Optional[Dict[str, Any]]:
-        """
-        Возвращает плейлист по имени.
-        """
-        return self._playlists.get(name)
-
-    def get_all_playlists(self) -> List[Dict[str, Any]]:
-        """
-        Список всех плейлистов пользователя.
-        """
-        return list(self._playlists.values())
-
-    # ------------------------------------------------------------------
-    # Скачивание
-    # ------------------------------------------------------------------
-
-    def download_playlist(self, name: str, confirmed: bool = False) -> Dict[str, Any]:
-        """
-        Скачивает плейлист для офлайн-прослушивания.
-
-        Args:
-            name: название плейлиста
-            confirmed: true — диалог подтверждения пройден
-
-        Returns:
-            Статус скачивания
-        """
-        if not confirmed:
+    def get_playlist(self, name: str) -> dict[str, Any] | None:
+        """Возвращает плейлист по имени или None."""
+        if name in self._playlists:
             return {
-                "status": "pending_confirmation",
-                "dialog": "Скачать плейлист для офлайн-прослушивания?",
-                "buttons": ["Да", "Отмена"],
+                "name": name,
+                "tracks": list(self._playlists[name]),
             }
+        return None
 
-        self._playlists[name]["offline_available"] = True
-        self._download_progress[name] = {
-            "status": "downloading",
-            "progress_percent": 0,
-            "icon": "download_arrow",
-        }
-        return {
-            "status": "started",
-            "name": name,
-            "offline_icon": "download_arrow",
-            "progress_percent": 0,
-        }
+    # ── REQ-11 / Q-04: Скачивание ──
 
-    def download_track(
-        self, track_id: str, confirmed: bool = False
-    ) -> Dict[str, Any]:
+    def download_playlist(self, name: str) -> dict[str, Any]:
         """
-        Скачивает одиночный трек для офлайн-прослушивания.
+        Скачивание плейлиста.
 
-        Args:
-            track_id: идентификатор трека
-            confirmed: true — диалог подтверждения пройден
-
-        Returns:
-            Статус скачивания
+        Если ``_subscription is None`` → ошибка 403.
+        Если подписка есть → диалог подтверждения → загрузка.
         """
-        if not confirmed:
+        if self._subscription is None or self._subscription == "free":
             return {
-                "status": "pending_confirmation",
-                "dialog": "Скачать трек для офлайн-прослушивания?",
-                "buttons": ["Да", "Отмена"],
+                "success": False,
+                "error": 403,
+                "message": UNSUBSCRIBED_BUTTON_TOOLTIP,
+                "button_state": "disabled",
             }
-
+        # Подписка есть — диалог подтверждения
         return {
-            "status": "started",
-            "track_id": track_id,
-            "offline_icon": "download_arrow",
+            "success": True,
+            "dialog": DOWNLOAD_CONFIRMATION_PROMPT,
+            "offline_icon": OFFLINE_ICON_DESCRIPTION,
         }
 
-    def get_download_status(self, name: str) -> Dict[str, Any]:
+    def confirm_download(self, name: str) -> dict[str, Any]:
         """
-        Статус скачивания.
-        """
-        return self._download_progress.get(name, {})
+        Подтверждение скачивания (Q-15).
 
-    # ------------------------------------------------------------------
-    # Сеть и переподключение
-    # ------------------------------------------------------------------
+        После нажатия «Да» — плейлист начинает загружаться.
+        """
+        if self._subscription is not None and self._subscription != "free":
+            self._playlist_downloaded.add(name)
+            return {
+                "downloaded": True,
+                "playlist": name,
+                "offline_icon": OFFLINE_ICON_DESCRIPTION,
+            }
+        return {"downloaded": False, "error": "Нет подписки"}
 
-    def simulate_network_disruption(self) -> Dict[str, Any]:
+    def download_track(self, track_title: str) -> dict[str, Any]:
         """
-        Имитирует обрыв сети.
+        Скачивание одиночного трека (Q-16).
         """
-        self._network_connected = False
+        if self._subscription is not None and self._subscription != "free":
+            self._track_downloaded.add(track_title)
+            return {
+                "downloaded": True,
+                "track": track_title,
+                "offline_icon": OFFLINE_ICON_DESCRIPTION,
+            }
         return {
-            "status": "disconnected",
-            "message": NETWORK_ERROR_MESSAGE,
-            "reconnection_attempts": 0,
+            "downloaded": False,
+            "error": "Нет подписки",
         }
 
-    def get_network_status(self) -> Dict[str, Any]:
-        """
-        Текущий статус сети.
-        """
+    def get_offline_status(self, item_name: str) -> dict[str, Any]:
+        """Статус офлайн-загрузки элемента."""
         return {
-            "connected": self._network_connected,
+            "downloaded": (
+                item_name in self._playlist_downloaded
+                or item_name in self._track_downloaded
+            ),
+            "offline_icon": (
+                OFFLINE_ICON_DESCRIPTION
+                if (item_name in self._playlist_downloaded
+                    or item_name in self._track_downloaded)
+                else None
+            ),
         }
 
-    def attempt_reconnection(self) -> Dict[str, Any]:
-        """
-        Выполняет одну попытку переподключения.
+    # ── REQ-13, Q-12: Сеть / переподключение ──
 
-        Returns:
-            Результат попытки
-        """
-        self._reconnection_attempts += 1
-        is_last = self._reconnection_attempts >= 3
-        if is_last:
-            # После 3-й неудачной попытки — ставим плеер на паузу
-            if self._current_track:
-                self._current_track["is_playing"] = False
+    def simulate_network_break(self) -> dict[str, Any]:
+        """Эмуляция обрыва сети."""
+        self._network_available = False
         return {
-            "attempt": self._reconnection_attempts,
-            "max_attempts": 3,
-            "interval_seconds": 10,
+            "network_available": False,
+            "error_message": ERROR_MESSAGE_RETRY,
+        }
+
+    def reconnect_attempt(self, count: int) -> dict[str, Any]:
+        """
+        N-я попытка переподключения.
+
+        ``count`` от 1 до 3.
+        """
+        self._reconnect_attempts = count
+        if count < EXPECTED_RETRY_ATTEMPTS:
+            return {
+                "attempt": count,
+                "total": EXPECTED_RETRY_ATTEMPTS,
+                "status": "pending",
+                "interval_sec": EXPECTED_RETRY_INTERVAL_SEC,
+            }
+        # Последняя (3-я) попытка — тоже с интервалом
+        return {
+            "attempt": count,
+            "total": EXPECTED_RETRY_ATTEMPTS,
             "status": "failed",
-            "is_last_attempt": is_last,
+            "error": ERROR_MESSAGE_FAILED,
+            "interval_sec": EXPECTED_RETRY_INTERVAL_SEC,
         }
 
-    def cancel_reconnection(self) -> Dict[str, Any]:
-        """
-        Отменяет попытку переподключения вручную.
-        """
-        self._reconnection_attempts = 0
+    def get_reconnect_state(self) -> dict[str, Any]:
+        """Текущее состояние переподключения."""
         return {
-            "status": "cancelled",
-            "playback_paused": True,
-            "position": "01:23",
+            "attempts": self._reconnect_attempts,
+            "cancelled": self._reconnect_cancelled,
+            "network_available": self._network_available,
         }
 
-    def restore_network(self) -> Dict[str, Any]:
+    # ── Q-13: Отмена переподключения ──
+
+    def cancel_reconnect(self) -> dict[str, Any]:
         """
-        Восстанавливает сетевое соединение.
+        Отмена попытки переподключения вручную.
+
+        После отмены — трек ставится на паузу.
         """
-        self._network_connected = True
+        self._reconnect_cancelled = True
+        self._reconnect_attempts = 0
         return {
-            "status": "connected",
-            "previous_position": "01:23",
+            "cancelled": True,
+            "paused": True,
         }
 
-    def get_network_reconnection_attempts(self) -> int:
-        """Возвращает количество выполненных попыток переподключения."""
-        return self._reconnection_attempts
+    # ── Q-14: Возобновление ──
+
+    def resume_from_position(self, position: str) -> dict[str, Any]:
+        """
+        Возобновление воспроизведения с указанной позиции.
+
+        ``position`` — строка ``MM:SS``.
+        """
+        self._current_position = position
+        return {
+            "resumed": True,
+            "position": position,
+        }
+
+    def get_current_position(self) -> str:
+        """Текущая позиция таймлайна."""
+        return self._current_position
+
+    # ── Q-24: Очередь ──
+
+    def get_queue(self) -> list[str]:
+        """Возвращает копию очереди воспроизведения."""
+        return list(self._play_queue)
+
+    def add_to_queue(self, track_title: str, position: str = "next") -> dict[str, Any]:
+        """
+        Добавление трека в очередь.
+
+        ``position="next"`` — сразу после текущего.
+        """
+        if position == "next":
+            self._play_queue.insert(1, track_title)
+        else:
+            self._play_queue.append(track_title)
+        return {
+            "added": True,
+            "track": track_title,
+            "position": position,
+            "queue": list(self._play_queue),
+        }
+
+    # ── BR-007 / BR-015: Плейлист / дубликат ──
+
+    def add_to_playlist(
+        self,
+        playlist_name: str,
+        track_title: str,
+        allow_duplicates: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Добавление трека в плейлист.
+
+        Если ``allow_duplicates=False`` и трек уже есть —
+        поведение зависит от ``BR-015`` (не определено).
+        """
+        playlist = self._playlists.get(playlist_name)
+        if playlist is None:
+            return {"error": "Плейлист не найден"}
+
+        if not allow_duplicates and track_title in playlist:
+            # BR-015: не определено — возвращаем как есть
+            return {
+                "added": True,
+                "duplicate": True,
+                "track": track_title,
+                "playlist": playlist_name,
+            }
+
+        playlist.append(track_title)
+        self._playlists[playlist_name] = playlist
+        return {
+            "added": True,
+            "duplicate": False,
+            "track": track_title,
+            "playlist": playlist_name,
+            "tracks": list(playlist),
+        }
+
+    # ── BR-005: Управление воспроизведением ──
+
+    def playback_controls(self, action: str) -> dict[str, Any]:
+        """
+        Управление воспроизведением.
+
+        ``action``: ``"pause"``, ``"play"``, ``"skip"``, ``"seek"``.
+        """
+        valid = {"pause", "play", "skip", "seek"}
+        assert action in valid, f"Unknown action: {action}"
+        return {
+            "action": action,
+            "success": True,
+        }
 
 
-# ---------------------------------------------------------------------------
-# Константы для детерминированного поведения заглушек
-# ---------------------------------------------------------------------------
+# ── Константы (локальные, продублированы для изоляции) ──
 
-NETWORK_ERROR_MESSAGE = (
-    "Проблема с соединением. Выполняется попытка переподключения…"
+UNSUBSCRIBED_BUTTON_TOOLTIP: str = "Требуется подписка"
+DOWNLOAD_CONFIRMATION_PROMPT: str = (
+    "Скачать плейлист для "
+    "офлайн-прослушивания?"
 )
-
-RECONNECTION_FAILED_MESSAGE = (
+OFFLINE_ICON_DESCRIPTION: str = "стрелка вниз"
+ERROR_MESSAGE_RETRY: str = (
+    "Проблема с соединением. "
+    "Выполняется попытка переподключения…"
+)
+ERROR_MESSAGE_FAILED: str = (
     "Не удалось восстановить соединение. "
-    "Проверьте подключение к интернету."
+    "Проверьте подключение к интернету"
 )
+EXPECTED_RETRY_ATTEMPTS: int = 3
+EXPECTED_RETRY_INTERVAL_SEC: int = 10
