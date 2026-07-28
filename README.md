@@ -27,7 +27,7 @@ input/requirements/*.md
         ▼
   ❓ [optional] pytest generation — orchestrator asks if you want pytest tests
         │
-        ├── yes ──► pytest-test-writer per PASS journey → tests/test_<J>.py
+        ├── yes ──► pytest-stub-writer per PASS journey → output/tests/<J>/
         └── no  ──► continue to coverage gate
         │
         ▼

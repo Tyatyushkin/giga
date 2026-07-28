@@ -125,33 +125,32 @@ python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/review
 > «Готово N кейсов в Markdown. Сгенерировать pytest-тесты?»
 
 Вопрос задаётся **один раз**, после завершения всех journey — не по каждому.
-Если пользователь отвечает «да», оркестратор запускает **по одному** `pytest-test-writer` на каждый
+Если пользователь отвечает «да», оркестратор запускает **по одному** `pytest-stub-writer` на каждый
 journey, у которого **ноль BLOCKER** (т.е. вердикт `PASS`), а `NEEDS_HUMAN` journey обрабатывает
 оркестратор вручную (пропущенные тесты с `@pytest.mark.skip`).
 
-Агент `pytest-test-writer` читает:
+Агент `pytest-stub-writer` читает:
 
 - План сьюты → `output/suites/<ID>.md`
 - Все файлы кейсов → `output/cases/<ID>/TC-*.md`
 - Все JSON кейсов → `output/cases/<ID>/TC-*.json` (если есть)
+- Последнее ревью → `output/reviews/<ID>-iter<N>.md`
 
-И пишет:
-
-- `tests/helpers/test_data.py` — типизированные константы из всех таблиц `## Тестовые данные`
-- `tests/helpers/api_stub.py` — по одному эмулированному методу на REQ, возвращает dict
-- `tests/helpers/conftest.py` — глобальные фикстуры (fixture api_client, project_root)
-- `pytest.ini` — маркеры из ревью
-- `tests/test_JOURNEY_ID.py` — один класс на Case, один `test_` на шаг
-
-**Контракт** (все пути в `tests/`):
+**Контракт** (все пути в `output/tests/<JOURNEY_ID>/`):
 
 | Файл | Содержание |
 |---|---|
-| `tests/conftest.py` | Глобальные фикстуры |
-| `tests/helpers/test_data.py` | Типизированные константы |
-| `tests/helpers/api_stub.py` | Эмулированный API-клиент |
-| `pytest.ini` | Реестр маркеров |
-| `tests/test_JOURNEY_ID.py` | Все тест-кейсы для одного journey |
+| `output/tests/<ID>/conftest.py` | Фикстуры journey |
+| `output/tests/<ID>/test_data.py` | Типизированные константы из таблиц `## Тестовые данные` |
+| `output/tests/<ID>/api_stub.py` | Детерминированная эмуляция API |
+| `output/tests/<ID>/test_<ID>.py` | Один класс на кейс, один `test_` на шаг |
+| `output/tests/<ID>/README.md` | Отчёт о генерации и прогоне |
+| `pytest.ini` | Реестр маркеров — один на репозиторий, правится человеком |
+
+Браузерные тесты пишет отдельный агент `browser-test-writer` — **только** по явному флагу
+`--selenium` и только при заданном адресе стенда. Собственного адреса приложения у агентов нет:
+он приходит из `--base-url` или из `input/requirements/`. Домен остаётся во входных данных
+(правило 7), включая адреса стендов.
 
 **Правила:**
 
@@ -162,7 +161,7 @@ journey, у которого **ноль BLOCKER** (т.е. вердикт `PASS`)
 5. **API-стаб детерминирован.** Возвращает одно и то же на одни и те же входные данные — никаких
    flaky-тестов.
 
-**Allure-разметка:** см. `.gigacode/agents/pytest-test-writer.md` — раздел «Allure-разметка».
+**Allure-разметка:** см. `.gigacode/agents/pytest-stub-writer.md` — раздел «Allure-разметка».
 
 **Report in `output/tests/README.md`:**
 
@@ -180,7 +179,12 @@ After generation, the agent **appends** a summary to `output/tests/README.md`:
 - **Всего тестов** — количество `test_` функций
 - **PASS** — тесты, чей expected result определён в REQ
 - **SKIP** — `@pytest.mark.skip` из-за выдуманного поведения (BLOCKER)
-- **FAIL** — 0 (детерминированная эмуляция)
+- **FAIL** — сколько показал pytest
+
+**Все четыре числа берутся из вывода `pytest` этого прогона.** Ни одно не пишется по шаблону,
+по памяти или по ожиданию, и «ноль FAIL» пишется только если pytest показал ноль. Файлы
+результатов Allure порождаются исключительно запуском pytest — написанный руками файл результата
+является подделкой отчёта о прогоне, даже если числа в нём верны.
 
 Каждый SKIP содержит ссылку на пробел и номер вопроса из уточняющего списка.
 Пример:
@@ -196,6 +200,3 @@ def test_timer_visual():
 **Exit:** After all writer agents finish, the orchestrator reports:
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
-
-## GigaCode Added Memories
-- BASE_URL = "https://zvuk.com/" — для всех pytest/Selenium тестов
