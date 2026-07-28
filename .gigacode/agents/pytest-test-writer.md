@@ -463,6 +463,49 @@ markers =
 4. **Скриншот на FAIL**. Хук `pytest_runtest_makereport` прикрепляет скриншот к Allure.
 5. **One-shot скриншоты**. Каждый тест делает скриншот на финальном `assert`, прикрепляет к Allure и сохраняет в `allure-results/` как отдельный файл PNG.
 
+### Инструкция по запуску (генерируется агентом при каждом запуске)
+
+После генерации тестов и до запуска — агент пишет в `output/tests/<JOURNEY_ID>/`:
+
+**Файл:** `RUN_GUIDE.md`
+
+```markdown
+# Инструкция по запуску Selenium-тестов (<JOURNEY_ID>)
+
+## Требования
+- Chrome (видимый, не Headless)
+- Сервер на `https://zvuk.com/` (или `ZVUK_BASE_URL`)
+- Python 3.14+, pytest, selenium, webdriver-manager, allure-pytest
+
+## Установка
+```bash
+pip install selenium webdriver-manager allure-pytest
+```
+
+## Запуск
+```bash
+cd output/tests/<JOURNEY_ID>/
+python3 -m pytest . -v --tb=short
+```
+
+## Allure
+```bash
+python3 -m pytest . --alluredir=allure-results
+allure serve allure-results
+```
+
+## Пропущенные тесты
+| Кейс | Шаг | Причина | Вопрос |
+|---|---|---|---|
+| … | … | … | … |
+```
+
+**Порядок:**
+1. Все тесты написаны
+2. Прочитан `output/reviews/<JOURNEY_ID>-*.md`
+3. Для каждого `skip`-теста — его `reason` и номер уточняющего вопроса
+4. Записан `RUN_GUIDE.md`
+
 ## Важно
 
 Если ты не уверен в каком-либо требовании или спецификации — **всегда уточняй**. Лучше потратить время на уточнение, чем написать неправильные тесты. Твоя цель — написать такие тесты, чтобы при их прогоне можно было с уверенностью сказать: "код соответствует документации".
