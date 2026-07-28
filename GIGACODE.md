@@ -1,156 +1,165 @@
-# E2E Test Case Factory — project context
+# E2E Test Case Factory — контекст проекта
 
-This project turns product requirements into **connected end-to-end test suites** using a loop of
-three subagents inside Qwen Code:
+Этот проект превращает продуктовые требования в **связанные end-to-end тестовые сценарии** с помощью
+цикла из трёх под-агентов внутри Qwen Code:
 
 ```
-requirements  →  [requirements-analyst]  →  suite plans (journeys) + _index.json
+требования  →  [requirements-analyst]  →  планы сьют (journey) + _index.json
                         ↓
-              requirements gate: the human is shown every gap, every uncovered REQ,
-              every blocking question, and chooses how many loops run in parallel
+              шлюз требований: человеку показывают каждый пробел, каждое непокрытое REQ,
+              каждый блокирующий вопрос, и он выбирает, сколько циклов запустить параллельно
                         ↓
-   ┌────────────────────┼────────────────────┐        P loops, one per journey/area,
-   ▼                    ▼                    ▼        running concurrently
+   ┌────────────────────┼────────────────────┐        P циклов, один на journey/area,
+   ▼                    ▼                    ▼        выполняются конкурентно
  [qa-designer J01]   [qa-designer J02]   [qa-designer J03]
    ▼                    ▼                    ▼
  [test-critic J01]   [test-critic J02]   [test-critic J03]  → output/state/<J>.json
    │                    │                    │
-   └── blockers > 0 and iteration < MAX_ITERATIONS ──→ back to that journey's designer
-       blockers = 0 ──→ that journey is DONE, the others keep running
+   └── blockers > 0 и iteration < MAX_ITERATIONS ──→ обратно к дизайнеру этого journey
+       blockers = 0 ──→ этот journey ГОТОВ, остальные продолжают
                         ↓
-              coverage gate: the human is shown what the run could not settle
+              шлюз покрытия: человеку показывают, что прогон не смог урегулировать
                         ↓
                      output/report.md
 ```
 
-## Directory contract
+## Контракт директорий
 
-| Path | Owner | Content |
+| Путь | Владелец | Содержание |
 |---|---|---|
-| `input/requirements/*.md` | human | source requirements |
-| `input/requirements/_answers.md` | human, written by the orchestrator | answers to clarifying questions; ranks as a requirement |
-| `output/suites/<JOURNEY_ID>.md` | requirements-analyst | journey / suite plan |
-| `output/suites/_index.json` | requirements-analyst | machine index: journeys, areas, gaps, questions, uncovered REQ |
-| `output/cases/<JOURNEY_ID>/<CASE_ID>.md` | qa-designer | test case, Markdown (primary) |
-| `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | qa-designer | same case, machine-readable |
-| `output/reviews/<JOURNEY_ID>-iter<N>.md` | test-critic | review + fix list |
-| `output/state/<JOURNEY_ID>.json` | test-critic | that journey's loop state — one writer per file |
-| `output/state.json` | orchestrator | aggregate snapshot across journeys |
-| `output/report.md` | orchestrator | final run summary |
+| `input/requirements/*.md` | человек | исходные требования |
+| `input/requirements/_answers.md` | человек (написан оркестратором) | ответы на уточняющие вопросы; приравниваются к требованиям |
+| `output/suites/<JOURNEY_ID>.md` | requirements-analyst | план сьюты / journey |
+| `output/suites/_index.json` | requirements-analyst | машинный индекс: journey, области, пробелы, вопросы, непокрытые REQ |
+| `output/cases/<JOURNEY_ID>/<CASE_ID>.md` | qa-designer | тест-кейс, Markdown (основной) |
+| `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | qa-designer | тот же кейс, машиночитаемый |
+| `output/reviews/<JOURNEY_ID>-iter<N>.md` | test-critic | ревью + список исправлений |
+| `output/state/<JOURNEY_ID>.json` | test-critic | состояние цикла этого journey — один пишущий на файл |
+| `output/state.json` | оркестратор | агрегированный снимок по всем journey |
+| `output/report.md` | оркестратор | финальная сводка прогона |
 
-**One writer per path.** Parallel loops make this a correctness rule, not a convention: a designer
-writes only its own `output/cases/<JOURNEY_ID>/`, a critic only its own review and
-`output/state/<JOURNEY_ID>.json`, and only the orchestrator writes `output/state.json` and
-`output/report.md`. Any file two agents could write concurrently is a bug in the prompt.
+**Один пишущий на путь.** Параллельные циклы превращают это в правило корректности, а не в
+соглашение: дизайнер пишет только свой `output/cases/<JOURNEY_ID>/`, критик — только свой ревью
+и `output/state/<JOURNEY_ID>.json`, и только оркестратор пишет `output/state.json` и
+`output/report.md`. Любой файл, который могли бы одновременно писать два агента — это ошибка
+в промпте.
 
-## Non-negotiable rules (apply to every agent)
+## Необсуждаемые правила (применимы к каждому агенту)
 
-1. **Output language of artifacts is Russian.** Section headings must match `docs/format.md` character
-   for character. Agent reasoning and commit messages may be English.
-2. **No invented behaviour.** If a system reaction is not in the requirements, it does not exist.
-   Write it into `## Выявленные пробелы` / `## Уточняющие вопросы` instead of assuming it.
-   Inventing behaviour is a BLOCKER at review.
-3. **No vague expected results.** «Успешно», «корректно», «работает», «без ошибок», «как ожидается»
-   are forbidden as the substance of an expected result. Every result must name an observable:
-   screen, element, text, state, counter, order of items. Vague result is a BLOCKER at review.
-4. **One action per step.** A step contains exactly one user action and exactly one checkable result.
-5. **State continuity.** Data created in an early step must be referenced by its concrete value in
-   later steps (playlist name, track title, phone number). A journey is a chain, not a list.
-6. **Traceability.** Every stage of a journey and every step of a case carries a requirement anchor
-   (`REQ-XX`). A step with no anchor must be justified as an obvious UI navigation step.
-7. **Reusability.** Nothing in the templates or agent prompts may hardcode the «Звук» domain.
-   The domain lives only in `input/requirements/`.
-8. **Journey isolation.** A design/review loop owns exactly one journey (or, in `area` mode, one
-   functional area) and reads and writes nothing outside it. Plans must therefore be self-sufficient:
-   no cross-references between journeys, no shared fixtures created by another journey's steps.
-9. **Gaps are shown to the human, not absorbed.** Uncovered requirements, contradictions and blocking
-   questions are surfaced as explicit lists with items — never as a count, never buried in a file the
-   human has to go find. The orchestrator asks before designing and again before reporting.
+1. **Язык артефактов — русский.** Заголовки разделов должны совпадать с `docs/format.md` символ в
+   символ. Рассуждения агентов и сообщения коммитов могут быть на английском.
+2. **Без вымышленного поведения.** Если реакция системы не описана в требованиях — её не существует.
+   Записывайте её в `## Выявленные пробелы` / `## Уточняющие вопросы`, а не придумывайте.
+   Вымышленное поведение — это BLOCKER на ревью.
+3. **Нет размытых ожидаемых результатов.** «Успешно», «корректно», «работает», «без ошибок», «как
+   ожидается» — запрещены как суть ожидаемого результата. Каждый результат должен называть
+   наблюдаемое: экран, элемент, текст, состояние, счётчик, порядок элементов.
+   Размытый результат — это BLOCKER на ревью.
+4. **Одно действие на шаг.** Шаг содержит ровно одно действие пользователя и ровно один проверяемый
+   результат.
+5. **Непрерывность состояния.** Данные, созданные на раннем шаге, должны быть упомянуты по их
+   конкретному значению на поздних шагах (название плейлиста, заголовок трека, номер телефона).
+   Journey — это цепочка, а не список.
+6. **Прослеживаемость.** Каждый этап journey и каждый шаг кейса несёт якорь требования (`REQ-XX`).
+   Шаг без якоря должен быть обоснован как очевидный шаг UI-навигации.
+7. **Переиспользуемость.** Ничего в шаблонах или промптах агентов не должно хардкодить домен
+   «Звук». Домен живёт только в `input/requirements/`.
+8. **Изоляция journey.** Цикл дизайн/ревью владеет ровно одним journey (или, в режиме `area`, одной
+   функциональной областью) и читает/пишет только внутри него. Планы должны быть
+   самодостаточными: никаких перекрёстных ссылок между journey, никаких общих фикстур, созданных
+   шагами другого journey.
+9. **Пробелы показываются человеку, не поглощаются.** Непокрытые требования, противоречия и
+   блокирующие вопросы выводятся как явные списки с элементами — никогда как количество,
+   никогда не зарываются в файл, который человек должен идти искать. Оркестратор спрашивает
+   перед дизайном и снова перед отчётом.
 
-## Loop control
+## Управление циклом
 
-- `MAX_ITERATIONS = 3` (override with `--max N` argument to `/e2e:run`).
-- Each journey iterates independently. A journey exits its loop when its critic reports **zero
-  BLOCKERs**. MAJOR/MINOR findings are recorded in the review and in the final report but do not block.
-- If blockers remain after `MAX_ITERATIONS`, that journey stops and is marked `NEEDS_HUMAN` in
-  `output/report.md` with the unresolved list. Other journeys keep running.
-- A journey whose subagent errors or writes no state is `FAILED` — recorded, not fatal to the run.
+- `MAX_ITERATIONS = 3` (переопределить через `--max N` у команды `/e2e:run`).
+- Каждый journey итерируется независимо. Journey выходит из цикла, когда его критик сообщает о
+  **нуле BLOCKER**. MAJOR/MINOR находки записываются в ревью и в финальный отчёт, но не блокируют.
+- Если блокеры остаются после `MAX_ITERATIONS`, этот journey останавливается и помечается
+  `NEEDS_HUMAN` в `output/report.md` с неразрешённым списком. Остальные journey продолжают.
+- Journey, чей под-агент ошибся или не записал состояние, помечается `FAILED` — записывается,
+  не фатально для прогона.
 
-## Parallelism
+## Параллельность
 
-- The analyst runs once, over all requirements — journeys can only be found by looking at everything.
-- After the requirements gate, the human chooses `P`, the number of concurrent design/review loops
-  (`--parallel N` to skip the question; default recommendation `min(3, journeys)`), and the ownership
-  unit (`--unit journey|area`).
-- The orchestrator dispatches a wave by emitting `P` `agent` calls **in a single message**; agents in
-  one wave run concurrently and share no context. Every prompt therefore carries explicit paths and
-  an explicit ownership boundary.
-- Waves are lockstep: all designers of a wave finish, then all critics of that wave run, then the
-  orchestrator reads `output/state/*.json`, drops finished journeys, and refills from the queue.
+- Аналитик запускается один раз, по всем требованиям — journey можно найти, только глядя на всё.
+- После шлюза требований человек выбирает `P`, количество параллельных циклов дизайн/ревью
+  (`--parallel N` пропускает вопрос; рекомендуемое по умолчанию `min(3, количество journey)`),
+  и единицу владения (`--unit journey|area`).
+- Оркестратор отправляет волну вызовом `P` `agent` **в одном сообщении**; агенты в одной волне
+  выполняются конкурентно и не делят контекст. Каждый промпт поэтому несёт явные пути и
+  явную границу владения.
+- Волны lockstep: все дизайнеры волны заканчивают, затем все критики той же волны, затем
+  оркестратор читает `output/state/*.json`, убирает завершённые journey и пополняет из очереди.
 
-## Deterministic gate
+## Детерминированный шлюз
 
-Before any semantic review the critic must run:
+Перед любым семантическим ревью критик должен запустить:
 
 ```bash
 python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
 ```
 
-The linter checks structure, placeholders, step numbering, vague wording and step atomicity.
-Its findings are merged into the review report. Linter exit code 1 = blockers present.
+Линтер проверяет: структуру, плейсхолдеры, нумерацию шагов, размытые формулировки и атомарность
+шагов. Его находки сливаются в отчёт ревью. Код выхода линтера 1 = блокеры присутствуют.
 
-## Reference documents
+## Справочные документы
 
-- `docs/format.md` — mandatory output format (Russian) and JSON schema
-- `docs/quality-criteria.md` — 12 quality criteria the result is graded against
-- `docs/critic-rubric.md` — severity rules for the critic
-- `docs/examples.md` — bad → good rewrites for expected results, actions, data, questions
-- `templates/` — copyable skeletons
-- `examples/J01-onboarding-first-play/` — a fully worked plan + case that passes the linter
+- `docs/format.md` — обязательный формат вывода (русский) и JSON-схема
+- `docs/quality-criteria.md` — 12 критериев качества, по которым оценивается результат
+- `docs/critic-rubric.md` — правила серьёзности для критика
+- `docs/examples.md` — плохие → хорошие переписывания ожидаемых результатов, действий, данных, вопросов
+- `templates/` — копируемые скелеты
+- `examples/J01-onboarding-first-play/` — полностью проработанный план + кейс, проходящий линтер
 
-## Phase 4 — pytest code generation (optional, gated by human)
+## Фаза 4 — генерация pytest-тестов (опционально, шлюзуется человеком)
 
-After the E2E loop finishes (all journeys are `PASS` or `NEEDS_HUMAN`), the orchestrator **asks** the user:
+После завершения E2E-цикла (все journey — `PASS` или `NEEDS_HUMAN`), оркестратор **спрашивает**
+пользователя:
 
 > «Готово N кейсов в Markdown. Сгенерировать pytest-тесты?»
 
-The question is asked **once**, after all journeys are complete — not per-journey.
-If the user answers `yes`, the orchestrator launches **one** `pytest-test-writer` subagent per journey
-that has **zero BLOCKER** (i.e. `PASS` verdict), and the orchestrator handles `NEEDS_HUMAN` journeys
-manually (skipped tests with `@pytest.mark.skip`).
+Вопрос задаётся **один раз**, после завершения всех journey — не по каждому.
+Если пользователь отвечает «да», оркестратор запускает **по одному** `pytest-test-writer` на каждый
+journey, у которого **ноль BLOCKER** (т.е. вердикт `PASS`), а `NEEDS_HUMAN` journey обрабатывает
+оркестратор вручную (пропущенные тесты с `@pytest.mark.skip`).
 
-The `pytest-test-writer` agent reads:
+Агент `pytest-test-writer` читает:
 
-- Journey suite plan → `output/suites/<ID>.md`
-- All case files → `output/cases/<ID>/TC-*.md`
-- All case JSON → `output/cases/<ID>/TC-*.json` (if available)
+- План сьюты → `output/suites/<ID>.md`
+- Все файлы кейсов → `output/cases/<ID>/TC-*.md`
+- Все JSON кейсов → `output/cases/<ID>/TC-*.json` (если есть)
 
-And writes:
+И пишет:
 
-- `tests/helpers/test_data.py` — typed constants from every `## Тестовые данные` table
-- `tests/helpers/api_stub.py` — one emulated method per REQ, returns dict
-- `tests/helpers/conftest.py` — global fixtures (api_client fixture, project_root)
-- `pytest.ini` — markers from the review
-- `tests/test_JOURNEY_ID.py` — one class per Case, one `test_` per step
+- `tests/helpers/test_data.py` — типизированные константы из всех таблиц `## Тестовые данные`
+- `tests/helpers/api_stub.py` — по одному эмулированному методу на REQ, возвращает dict
+- `tests/helpers/conftest.py` — глобальные фикстуры (fixture api_client, project_root)
+- `pytest.ini` — маркеры из ревью
+- `tests/test_JOURNEY_ID.py` — один класс на Case, один `test_` на шаг
 
-**Contract** (all paths in `tests/`):
+**Контракт** (все пути в `tests/`):
 
-| File | Content |
+| Файл | Содержание |
 |---|---|
-| `tests/conftest.py` | Global fixtures |
-| `tests/helpers/test_data.py` | Typed constants |
-| `tests/helpers/api_stub.py` | Emulated API client |
-| `pytest.ini` | Marker registry |
-| `tests/test_JOURNEY_ID.py` | All test cases for one journey |
+| `tests/conftest.py` | Глобальные фикстуры |
+| `tests/helpers/test_data.py` | Типизированные константы |
+| `tests/helpers/api_stub.py` | Эмулированный API-клиент |
+| `pytest.ini` | Реестр маркеров |
+| `tests/test_JOURNEY_ID.py` | Все тест-кейсы для одного journey |
 
-**Rules:**
+**Правила:**
 
-1. **One test per step.** A `test_` function tests exactly one step from one case.
-2. **Skip blockers.** If the critic marked a step as BLOCKER, the test is `@pytest.mark.skip`.
-3. **No invented behavior.** All unobservable expectations are `skip`.
-4. **Data from constants.** No literals in test code.
-5. **API stub is deterministic.** Returns the same thing for the same input — no flaky tests.
+1. **Один тест на шаг.** Функция `test_` тестирует ровно один шаг из одного кейса.
+2. **Пропустить блокеры.** Если критик пометил шаг как BLOCKER — тест помечается `@pytest.mark.skip`.
+3. **Без вымышленного поведения.** Все ненаблюдаемые ожидания — `skip`.
+4. **Данные из констант.** Никаких литералов в тестовом коде.
+5. **API-стаб детерминирован.** Возвращает одно и то же на одни и те же входные данные — никаких
+   flaky-тестов.
 
-**Exit:** After all writer agents finish, the orchestrator reports:
+**Выход:** После завершения всех агентов-писателей оркестратор сообщает:
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
