@@ -131,6 +131,55 @@ def test_timer_visual(self, api_client):
     ...
 ```
 
+### Allure JSON — `output/tests/<JOURNEY_ID>/allure-results/`
+
+После генерации **и до запуска тестов** — создать директорию `allure-results/` в папке тестов джорни и записать туда **структурированный JSON-манифест** для каждого кейса.
+
+Файл: `output/tests/<JOURNEY_ID>/allure-results/<CASE_ID>-allure.json`
+
+Структура (один JSON-объект на кейс):
+
+```json
+{
+  "name": "TC-<JOURNEY_ID>-<NN> — <название кейса>",
+  "description": "<html-описание шагов из кейса>",
+  "labels": [
+    { "name": "req", "value": "REQ-XX" },
+    { "name": "layer", "value": "e2e" },
+    { "name": "journey", "value": "<JOURNEY_ID>" },
+    { "name": "language", "value": "ru" }
+  ],
+  "steps": [
+    {
+      "name": "Шаг N — <краткое действие>",
+      "expectedResult": "<наблюдаемый результат>",
+      "status": "passed",
+      "attachments": []
+    }
+  ],
+  "parameters": [
+    {
+      "name": "precondition",
+      "value": "<предусловие>"
+    }
+  ],
+  "links": [
+    {
+      "name": "REQ-XX",
+      "url": "input/requirements/",
+      "type": "requirement"
+    }
+  ]
+}
+```
+
+**Порядок:**
+1. Прочитать все `.md`-кейсы из `output/cases/<JOURNEY_ID>/`
+2. Для каждого кейса создать JSON-манифест
+3. Все JSON собрать в одну директорию `allure-results/`
+
+Это позволит запустить `allure serve <JOURNEY_ID>/allure-results/` сразу, без генерации через pytest.
+
 ### Отчёт в `output/tests/<JOURNEY_ID>/README.md`
 
 После генерации **и запуска тестов** — создать файл отчёта в директории джорни.

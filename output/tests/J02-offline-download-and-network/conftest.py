@@ -2,75 +2,164 @@
 Глобальные фикстуры для тестового пакета J02-offline-download-and-network.
 
 Предоставляет:
-- api_client — сконфигурированный HTTP-клиент (заглушка)
-- authenticated_client — клиент с активной подпиской Premium
-- unauthenticated_client — клиент без подписки (Free-тариф)
-- network_stable — фикстура стабильного сетевого соединения
-- network_unstable — фикстура с имитацией обрыва сети
+- api_client — базовый HTTP-клиент к сервису «Звук»
+- authenticated_client — клиент с авторизованным пользователем (Premium)
+- unauthenticated_client — клиент без подписки (Free)
+- playlist_data — предсозданный плейлист
+- queue_data — очередь воспроизведения
 """
 
 import pytest
+import os
+import json
+from typing import Dict, List, Optional, Any
+
+from api_stub import ZvukAPIClient
 
 
-@pytest.fixture(scope="function")
-def api_client():
+# ---------------------------------------------------------------------------
+# Пути к тестовым данным и API-заглушкам
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+TEST_DATA_DIR = os.path.join(PROJECT_ROOT, "test_data")
+
+
+# ---------------------------------------------------------------------------
+# pytest-маркеры — регистрация в pytest.ini
+# ---------------------------------------------------------------------------
+def pytest_configure(config):
+    """Регистрация кастомных маркеров."""
+    config.addinivalue_line("markers", "e2e: end-to-end тест (основной путь)")
+    config.addinivalue_line("markers", "smoke: базовая проверка работоспособности")
+    config.addinivalue_line("markers", "regression: проверка регрессии")
+    config.addinivalue_line("markers", "blocker: тест помечен как блокирующий")
+    config.addinivalue_line("markers", "unit: юнит-тест")
+    config.addinivalue_line("markers", "integration: интеграционный тест")
+
+
+# ---------------------------------------------------------------------------
+# Фикстура: заглушка API-клиента (детерминированная эмуляция)
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _reset_api_client():
+    """Автоматический сброс API-клиента — выполняется перед каждым тестом."""
+    pass
+
+
+@pytest.fixture
+def api_client() -> ZvukAPIClient:
     """
-    Возвращает экземпляр эмулированного API-клиента
-    (ApiStub) с детерминированным поведением.
+    Детерминированный API-клиент сервиса «Звук».
     """
-    from api_stub import ApiStub
+    client = ZvukAPIClient()
+    client.reset()
+    return client
 
-    return ApiStub()
 
-
-@pytest.fixture(scope="function")
-def authenticated_client(api_client):
+# ---------------------------------------------------------------------------
+# Фикстура: авторизованный пользователь с подпиской (Premium)
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def authenticated_client(api_client: ZvukAPIClient) -> ZvukAPIClient:
     """
-    Клиент с активной платной подпиской Premium.
-
-    Наследует api_client + pre-устанавливает:
-    - subscription = "premium"
-    - is_authenticated = True
-    - play_queue = ["Весна — Дельфин"]
-    - collection = ["Весна — Дельфин", "Голос — Дельфин"]
+    Настраивает клиент как авторизованного пользователя с активной подпиской Premium.
     """
-    api_client._set_subscription("premium")
-    api_client._set_authenticated(True)
-    api_client._set_play_queue(
-        ["Весна — Дельфин", "Голос — Дельфин"]
-    )
+    api_client.reset()
+    api_client.authenticate(user_id="premium@test.ru", subscription_tier="premium")
     return api_client
 
 
-@pytest.fixture(scope="function")
-def unauthenticated_client(api_client):
+# ---------------------------------------------------------------------------
+# Фикстура: авторизованный пользователь без подписки (Free)
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def unauthenticated_client(api_client: ZvukAPIClient) -> ZvukAPIClient:
     """
-    Клиент без активной подписки (Free-тариф).
-
-    Наследует api_client + pre-устанавливает:
-    - subscription = None / "free"
-    - is_authenticated = True (но подписка отсутствует)
+    Настраивает клиент как авторизованного пользователя без подписки (Free-тариф).
     """
-    api_client._set_subscription(None)
-    api_client._set_authenticated(True)
-    api_client._set_play_queue([])
+    api_client.reset()
+    api_client.authenticate(user_id="free@test.ru", subscription_tier="free")
     return api_client
 
 
-@pytest.fixture(scope="function")
-def network_stable():
+# ---------------------------------------------------------------------------
+# Фикстура: предсозданный плейлист
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def playlist_data() -> Dict[str, Any]:
     """
-    Стабильное сетевое соединение.
-    Возвращает True — сеть доступна.
+    Возвращает данные плейлиста, созданного на этапе 7 основного пути.
     """
-    return True
+    return {
+        "id": "pl-001",
+        "name": "Тестовый плейлист 2026-07",
+        "created_at": "2026-07-28T10:00:00Z",
+        "track_count": 0,
+        "tracks": [],
+        "offline_available": False,
+    }
 
 
-@pytest.fixture(scope="function")
-def network_unstable():
+# ---------------------------------------------------------------------------
+# Фикстура: очередь воспроизведения
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def queue_data() -> List[Dict[str, Any]]:
     """
-    Нестабильное сетевое соединение (обрыв).
+    Очередь воспроизведения после добавления второго трека.
+    """
+    return [
+        {"title": "Весна", "artist": "Дельфин", "position": 1},
+        {"title": "Голос", "artist": "Дельфин", "position": 2},
+    ]
 
-    Возвращает False — сеть недоступна.
+
+# ---------------------------------------------------------------------------
+# Фикстура: данные трека для воспроизведения
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def track_data() -> Dict[str, Any]:
     """
-    return False
+    Данные трека «Весна — Дельфин», используемого в основном сценарии.
+    """
+    return {
+        "title": "Весна",
+        "artist": "Дельфин",
+        "duration_seconds": 180,
+        "current_position": "01:23",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Фикстура: поисковый запрос
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def search_query() -> str:
+    """Поисковый запрос для основного сценария."""
+    return "Дельфин"
+
+
+# ---------------------------------------------------------------------------
+# Фикстура: состояние сети (стабильное / обрыв / восстановление)
+# ---------------------------------------------------------------------------
+@pytest.fixture(params=["stable", "disconnected", "reconnected"])
+def network_state(request) -> str:
+    """
+    Параметризованная фикстура для тестов с разными состояниями сети.
+    """
+    return request.param
+
+
+# ---------------------------------------------------------------------------
+# Фикстура: журнал попыток переподключения
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def reconnection_log() -> List[Dict[str, Any]]:
+    """
+    Журнал попыток переподключения (3 попытки по 10 секунд).
+    """
+    return [
+        {"attempt": 1, "status": "failed", "timestamp": "2026-07-28T10:01:23Z"},
+        {"attempt": 2, "status": "failed", "timestamp": "2026-07-28T10:01:33Z"},
+        {"attempt": 3, "status": "failed", "timestamp": "2026-07-28T10:01:43Z"},
+    ]
