@@ -1,0 +1,7 @@
+output/cases/
+output/suites/
+output/reviews/
+output/state.json
+output/report.md
+__pycache__/
+*.pyc
