@@ -1,374 +1,141 @@
 """
-api_stub.py — deterministic emulated API client for Zvuk service.
+Детерминированная эмуляция API «Звук».
 
-All methods return pre-defined data matching the test data tables
-from TC-J01-00 through TC-J01-04. No real network calls.
+Один метод = одно REQ-действие. Вход → выход детерминирован.
 """
 
-from __future__ import annotations
-
-import time
-from dataclasses import dataclass, field
-from typing import Any
+from typing import List, Optional, Dict, Any
 
 
-# ---------------------------------------------------------------------------
-# Data models
-# ---------------------------------------------------------------------------
+class ZvukApiStub:
+    """Заглушка API приложения «Звук».
 
-@dataclass
-class Track:
-    id: str
-    title: str
-    artist: str
-    album: str
-    duration_sec: int
-
-
-@dataclass
-class Artist:
-    id: str
-    name: str
-    genre: str
-
-
-@dataclass
-class Album:
-    id: str
-    title: str
-    artist: str
-    year: int
-
-
-@dataclass
-class Playlist:
-    id: str
-    name: str
-    track_count: int
-
-
-@dataclass
-class SearchResults:
-    tracks: list[Track] = field(default_factory=list)
-    artists: list[Artist] = field(default_factory=list)
-    albums: list[Album] = field(default_factory=list)
-    playlists: list[Playlist] = field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Pre-seeded catalogue for query "Дельфин"
-# ---------------------------------------------------------------------------
-
-_DOLPHIN_TRACKS = [
-    Track(id="trk-001", title="Весна", artist="Дельфин", album="Юность", duration_sec=218),
-    Track(id="trk-002", title="Любовь", artist="Дельфин", album="Юность", duration_sec=204),
-    Track(id="trk-003", title="Вера", artist="Дельфин", album="Юность", duration_sec=195),
-]
-
-_DOLPHIN_ARTISTS = [
-    Artist(id="art-001", name="Дельфин", genre="Русский рок"),
-]
-
-_DOLPHIN_ALBUMS = [
-    Album(id="alb-001", title="Юность", artist="Дельфин", year=2021),
-]
-
-_DOLPHIN_PLAYLISTS = [
-    Playlist(id="pl-001", name="Хиты русского рока", track_count=50),
-]
-
-# Full genre list for onboarding
-_AVAILABLE_GENRES = [
-    "Электроника",
-    "Хип-хоп",
-    "Инди",
-    "Поп",
-    "Рок",
-    "R&B",
-    "Классика",
-    "Джаз",
-    "Латино",
-    "Метал",
-    "Кантри",
-    "Регги",
-]
-
-
-# ---------------------------------------------------------------------------
-# Exception classes
-# ---------------------------------------------------------------------------
-
-class ZvukAPIError(Exception):
-    """Generic API error."""
-
-
-class InvalidCodeError(ZvukAPIError):
-    """Raised when SMS confirmation code is wrong."""
-
-
-class ResendTooSoonError(ZvukAPIError):
-    """Raised when resend is attempted before 60 s elapse."""
-
-
-class OnboardingIncompleteError(ZvukAPIError):
-    """Raised when user tries to proceed with < 3 genres."""
-
-
-class AuthRequiredError(ZvukAPIError):
-    """Raised when an unauthenticated call is made."""
-
-
-# ---------------------------------------------------------------------------
-# Stub client
-# ---------------------------------------------------------------------------
-
-class ZvukAPIClient:
-    """
-    Deterministic stub that emulates the Zvuk mobile API.
-
-    Internal state is reset on every ``reset()`` call or when a new
-    instance is created.
+    Хранит состояние: авторизован ли пользователь, какие жанры выбраны,
+    какой трек воспроизводится, какая очередь.
     """
 
     def __init__(self) -> None:
-        self.reset()
-
-    # ------------------------------------------------------------------
-    # State management
-    # ------------------------------------------------------------------
-
-    def reset(self) -> None:
-        """Return to initial (unauthenticated, clean) state."""
-        self._phone: str | None = None
-        self._confirmation_code: str | None = None
-        self._code_sent_at: float | None = None  # timestamp
-        self._authenticated: bool = False
-        self._access_token: str | None = None
-        self._selected_genres: list[str] = []
+        self._is_authenticated: bool = False
+        self._phone_number: Optional[str] = None
+        self._confirmed_code: Optional[str] = None
+        self._selected_genres: List[str] = []
         self._onboarding_completed: bool = False
-        self._current_track: Track | None = None
-        self._queue: list[Track] = []
+        self._current_track: Optional[str] = None
+        self._queue: List[str] = []
 
-    @property
-    def is_authenticated(self) -> bool:
-        return self._authenticated
+    # ── REQ-01: Регистрация по номеру телефона ──
 
-    @property
-    def selected_genres(self) -> list[str]:
-        return list(self._selected_genres)
+    def send_code(self, phone: str) -> Dict[str, Any]:
+        """Отправить код на указанный номер.
 
-    @property
-    def current_track(self) -> Track | None:
-        return self._current_track
-
-    @property
-    def queue(self) -> list[Track]:
-        return list(self._queue)
-
-    # ------------------------------------------------------------------
-    # REQ-01: Phone / SMS flow
-    # ------------------------------------------------------------------
-
-    def send_confirmation_code(self, phone: str) -> dict[str, Any]:
+        Детерминированный результат: при любом номере возвращаем код 1111.
         """
-        Send SMS confirmation code to *phone*.
+        self._phone_number = phone
+        return {"status": "code_sent", "code": "1111", "phone": phone}
 
-        Returns a dict with ``{"sent": True, "retry_after_sec": 60}``.
-        The stub always uses code ``"1111"``.
+    def confirm_code(self, phone: str, code: str) -> Dict[str, Any]:
+        """Подтвердить код.
+
+        Детерминированный результат:
+        - Если code == "1111" → успех.
+        - Иначе → ошибка "Неверный код".
         """
-        self._phone = phone
-        self._confirmation_code = "1111"
-        self._code_sent_at = time.monotonic()
-        self._authenticated = False
-        self._access_token = None
-        return {"sent": True, "retry_after_sec": 60}
+        if code == "1111":
+            self._is_authenticated = True
+            return {"status": "ok", "phone": phone}
+        return {"status": "error", "message": "Неверный код"}
 
-    def confirm_code(self, code: str) -> dict[str, Any]:
+    def is_code_resend_available(self) -> bool:
+        """Доступна ли повторная отправка кода.
+
+        Детерминированный результат: всегда False в течение 60 секунд.
         """
-        Confirm the SMS code.
+        return False
 
-        For the stub the only valid code is ``"1111"``.
-        Raises ``InvalidCodeError`` for any other value.
+    # ── REQ-02: Онбординг — выбор жанров ──
+
+    def select_genres(self, genres: List[str]) -> Dict[str, Any]:
+        """Выбрать жанры на онбординге.
+
+        Детерминированный результат: жанры сохраняются, возвращается
+        количество выбранных. REQ-02 требует не менее 3 для продолжения.
         """
-        if self._code_sent_at is None:
-            raise AuthRequiredError("Код не был отправлен. Выполните send_confirmation_code.")
-
-        if code != self._confirmation_code:
-            raise InvalidCodeError("Неверный код")
-
-        self._authenticated = True
-        self._access_token = f"tok_{self._phone}_{int(time.time())}"
+        self._selected_genres = genres
+        count = len(genres)
+        can_continue = count >= 3
         return {
-            "authenticated": True,
-            "access_token": self._access_token,
-            "user_id": "usr-001",
+            "status": "ok",
+            "count": count,
+            "can_continue": can_continue,
         }
 
-    def resend_confirmation_code(self, phone: str | None = None) -> dict[str, Any]:
+    def confirm_onboarding(self) -> Dict[str, Any]:
+        """Подтвердить завершение онбординга.
+
+        Детерминированный результат:
+        - Если выбрано >= 3 жанров → главный экран открыт.
+        - Иначе → ошибка.
         """
-        Resend SMS code.
+        if len(self._selected_genres) >= 3:
+            self._onboarding_completed = True
+            return {"status": "ok", "screen": "main", "recommendations": 1}
+        return {"status": "error", "message": "Выберите не менее 3 жанров"}
 
-        Raises ``ResendTooSoonError`` if called before 60 seconds
-        have elapsed since ``send_confirmation_code``.
+    # ── REQ-03: Блок «Рекомендации» ──
+
+    def get_recommendations(self) -> List[Dict[str, Any]]:
+        """Получить блок рекомендаций.
+
+        Детерминированный результат: всегда содержит 1 элемент при
+        завершённом онбординге.
         """
-        target_phone = phone or self._phone
-        if target_phone is None:
-            raise AuthRequiredError("Номер не указан.")
+        if self._onboarding_completed:
+            return [{"title": "Рекомендовано для вас", "items": 3}]
+        return []
 
-        if self._code_sent_at is not None:
-            elapsed = time.monotonic() - self._code_sent_at
-            if elapsed < 60.0:
-                remaining = int(60.0 - elapsed) + 1
-                raise ResendTooSoonError(
-                    f"Повторная отправка недоступна. Подождите {remaining} с."
-                )
+    # ── REQ-04: Поиск ──
 
-        return self.send_confirmation_code(target_phone)
+    def search(self, query: str) -> Dict[str, Any]:
+        """Поиск по запросу.
 
-    # ------------------------------------------------------------------
-    # REQ-02: Onboarding — genre selection
-    # ------------------------------------------------------------------
-
-    def get_genre_list(self) -> list[str]:
-        """Return the full catalogue of available genres."""
-        return list(_AVAILABLE_GENRES)
-
-    def select_genres(self, genres: list[str]) -> dict[str, Any]:
+        Детерминированный результат:
+        - Если query == "Дельфин" → результаты во всех 4 вкладках.
+        - Если query == "" → пустой результат.
+        - Иначе → частичные результаты.
         """
-        Select genres for onboarding.
+        if query == "Дельфин":
+            return {
+                "tracks": [{"title": "Весна"}, {"title": "Любовь"}],
+                "artists": [{"name": "Дельфин"}],
+                "albums": [],
+                "playlists": [],
+            }
+        if query == "":
+            return {"tracks": [], "artists": [], "albums": [], "playlists": []}
+        return {"tracks": [], "artists": [], "albums": [], "playlists": []}
 
-        ``REQ-02`` requires **at least 3** genres.
-        Raises ``OnboardingIncompleteError`` otherwise.
+    # ── REQ-05: Плеер ──
+
+    def get_player_state(self) -> Dict[str, Any]:
+        """Текущее состояние плеера.
+
+        Детерминированный результат: трек "Весна", обложка загружена,
+        таймлайн активен.
         """
-        if len(genres) < 3:
-            raise OnboardingIncompleteError(
-                "Выберите не менее 3 жанров"
-            )
-        self._selected_genres = list(genres)
-        self._onboarding_completed = True
-        return {"selected": len(genres), "status": "completed"}
-
-    # ------------------------------------------------------------------
-    # REQ-03: Recommendations block
-    # ------------------------------------------------------------------
-
-    def get_recommendations(self) -> dict[str, Any]:
-        """
-        Return recommendations based on selected genres.
-
-        Requires authentication and completed onboarding.
-        """
-        self._require_auth()
-        if not self._onboarding_completed:
-            raise OnboardingIncompleteError(
-                "Онбординг не завершён. Выберите не менее 3 жанров."
-            )
-        # Return at least one recommended item by default
         return {
-            "items": [
-                {
-                    "type": "track",
-                    "id": "rec-trk-001",
-                    "title": "Рекомендованный трек",
-                    "artist": "Исполнитель",
-                }
-            ],
-            "count": 1,
+            "track": "Весна",
+            "artist": "Дельфин",
+            "cover": "cover.jpg",
+            "timeline": "0:00 / 3:45",
         }
 
-    # ------------------------------------------------------------------
-    # REQ-04: Search
-    # ------------------------------------------------------------------
+    # ── REQ-06: Управление очередью ──
 
-    def search(self, query: str) -> SearchResults:
+    def add_to_queue(self, track: str, position: str = "next") -> Dict[str, Any]:
+        """Добавить трек в очередь.
+
+        Детерминированный результат: трек встаёт на позицию сразу после
+        текущего.
         """
-        Search the catalogue.
-
-        Returns tab-separated results matching REQ-04.
-        Empty query returns empty results with no tabs.
-        """
-        self._require_auth()
-        if not query or query.strip() == "":
-            return SearchResults()
-
-        q = query.strip().lower()
-        if "дельфин" in q:
-            return SearchResults(
-                tracks=list(_DOLPHIN_TRACKS),
-                artists=list(_DOLPHIN_ARTISTS),
-                albums=list(_DOLPHIN_ALBUMS),
-                playlists=list(_DOLPHIN_PLAYLISTS),
-            )
-        # Unknown query → empty
-        return SearchResults()
-
-    # ------------------------------------------------------------------
-    # REQ-05: Player
-    # ------------------------------------------------------------------
-
-    def play_track(self, track_id: str) -> dict[str, Any]:
-        """
-        Start playback of a track.
-
-        Returns player state dict. REQ-05 requires cover art, title,
-        artist and timeline.
-        """
-        self._require_auth()
-        # Find track from catalogue
-        all_tracks = _DOLPHIN_TRACKS
-        track = next((t for t in all_tracks if t.id == track_id), None)
-        if track is None:
-            raise ZvukAPIError(f"Трек {track_id} не найден.")
-
-        self._current_track = track
-        # Remove from queue if present
-        self._queue = [t for t in self._queue if t.id != track.id]
-
-        return {
-            "track_id": track.id,
-            "title": track.title,
-            "artist": track.artist,
-            "album": track.album,
-            "duration_sec": track.duration_sec,
-            "cover_url": f"https://zvuk.ru/covers/{track.id}.jpg",
-            "status": "playing",
-            "position_sec": 0,
-        }
-
-    # ------------------------------------------------------------------
-    # REQ-06: Queue management
-    # ------------------------------------------------------------------
-
-    def play_next(self, track_id: str) -> dict[str, Any]:
-        """
-        Add a track to play next (position 1 in queue behind current).
-
-        Returns updated queue.
-        """
-        self._require_auth()
-        all_tracks = _DOLPHIN_TRACKS
-        track = next((t for t in all_tracks if t.id == track_id), None)
-        if track is None:
-            raise ZvukAPIError(f"Трек {track_id} не найден.")
-        # Insert right after current track
-        self._queue.insert(0, track)
-        return {
-            "added": track.id,
-            "position": 1,
-            "queue": [t.id for t in self._queue],
-        }
-
-    def get_queue(self) -> list[Track]:
-        """Return the current playback queue."""
-        self._require_auth()
-        return list(self._queue)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _require_auth(self) -> None:
-        if not self._authenticated:
-            raise AuthRequiredError(
-                "Требуется авторизация. Выполните confirm_code."
-            )
+        self._queue.append(track)
+        return {"status": "ok", "queue": self._queue, "position": position}

@@ -1,59 +1,32 @@
 """
-conftest.py — global fixtures for J01-onboarding-and-first-play tests.
-
-Provides a function-scoped ``api_client`` fixture that yields a clean
-``ZvukAPIClient`` instance for every test function.
+Глобальные фикстуры для тестов J01-onboarding-and-first-play.
 """
 
-from __future__ import annotations
-
 import pytest
-
-from api_stub import ZvukAPIClient
-
-
-@pytest.fixture(scope="function")
-def api_client() -> ZvukAPIClient:
-    """
-    Return a fresh, reset ZvukAPIClient instance.
-
-    Every test receives its own client with clean internal state:
-    - no phone registered
-    - not authenticated
-    - no genres selected
-    - no current track / queue
-    """
-    client = ZvukAPIClient()
-    client.reset()
-    return client
+from api_stub import ZvukApiStub
 
 
 @pytest.fixture(scope="function")
-def authenticated_client(api_client: ZvukAPIClient) -> ZvukAPIClient:
-    """
-    Return a ZvukAPIClient that has already completed
-    phone → SMS → confirmation → authentication flow.
+def api_client():
+    """Фикстура, возвращающая экземпляр API-заглушки.
 
-    This fixture is a convenience for tests that start after
-    authentication (e.g. TC-J01-03, TC-J01-04).
+    Перед каждым тестом создаётся новый экземпляр Stub с чистым состоянием.
     """
-    from test_data import TC_J01_00_Data
+    return ZvukApiStub()
 
-    api_client.send_confirmation_code(TC_J01_00_Data.PHONE)
-    api_client.confirm_code(TC_J01_00_Data.CONFIRMATION_CODE)
+
+@pytest.fixture(scope="function")
+def authenticated_client(api_client: ZvukApiStub) -> ZvukApiStub:
+    """Фикстура, возвращающая API-клиент с уже прошедшей регистрацией.
+
+    Выполняет последовательность:
+      1. Отправка кода на номер +7 999 000-00-11
+      2. Подтверждение кода 1111
+      3. Выбор жанров Электроника, Хип-хоп, Инди
+      4. Подтверждение онбординга
+    """
+    api_client.send_code("+7 999 000-00-11")
+    api_client.confirm_code("+7 999 000-00-11", "1111")
+    api_client.select_genres(["Электроника", "Хип-хоп", "Инди"])
+    api_client.confirm_onboarding()
     return api_client
-
-
-@pytest.fixture(scope="function")
-def onboarded_client(authenticated_client: ZvukAPIClient) -> ZvukAPIClient:
-    """
-    Return a client that has completed the full onboarding:
-    authenticated + 3 genres selected.
-
-    This fixture is a convenience for tests that start after
-    the main screen is shown (e.g. TC-J01-04).
-    """
-    from test_data import TC_J01_00_Data
-
-    authenticated_client.select_genres(list(TC_J01_00_Data.GENRES))
-    return authenticated_client

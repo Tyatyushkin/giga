@@ -131,25 +131,105 @@ def test_timer_visual(self, api_client):
     ...
 ```
 
-### Отчёт в `output/tests/README.md`
+### Отчёт в `output/tests/<JOURNEY_ID>/README.md`
 
-После генерации — дописать в `output/tests/README.md`:
+После генерации **и запуска тестов** — создать файл отчёта в директории джорни.
+
+Файл: `output/tests/<JOURNEY_ID>/README.md`
+
+Структура:
 
 ```markdown
-## <JOURNEY_ID> — pytest generation
+# <JOURNEY_ID> — отчёт о генерации pytest-тестов
 
-| Вердикт | Всего | PASS | SKIP | FAIL |
-|---|---|---|---|---|
-| PASS | N | N | M | 0 |
-```
+**Дата:** <дата генерации>
+**Источник:** <путь к suite-plan.md>
+**Базовые кейсы:** output/cases/<JOURNEY_ID>/
 
-### Запуск
+## Результат прогона
+
+| Всего тестов | PASS | SKIP | FAIL |
+|---|---|---|---|
+| N | N | M | 0 |
+
+## Покрытие
+
+| Кейс | Шагов | Статус |
+|---|---|---|
+| TC-<JOURNEY_ID>-00 — название | N | PASS |
+| TC-<JOURNEY_ID>-01 — название | N | PASS / SKIP |
+| … | N | … |
+
+## Пропущенные тесты (BLOCKER)
+
+| Кейс | Шаг | Причина skip | Уточняющий вопрос |
+|---|---|---|---|
+| TC-J... | 4 | REQ-01 не определяет UI | вопрос 2 |
+| … | … | … | … |
+
+## Allure
 
 ```bash
-pytest output/tests/<JOURNEY_ID>/ -v --tb=short -k "not blocker"
 pytest output/tests/<JOURNEY_ID>/ --alluredir=allure-results
 allure serve allure-results
 ```
+```
+
+**Порядок действий:**
+
+1. Написать все файлы тестов (`test_JOURNEY_ID.py`, `test_data.py`, `api_stub.py`, `conftest.py`).
+2. Убедиться, что `allure` импортирован в `test_JOURNEY_ID.py`.
+3. Запустить тесты:
+
+   ```bash
+   python3 -m pytest output/tests/<JOURNEY_ID>/ -v --tb=short 2>&1
+   ```
+
+4. Прочитать вывод pytest и **собрать статистику** (общее число, PASS, SKIP, FAIL).
+5. Для каждого skip-теста прочитать его `reason` и сопоставить с уточняющим вопросом из suite-plan или кейса.
+6. Записать `output/tests/<JOURNEY_ID>/README.md` с заполненными цифрами.
+
+Пример заполненного отчёта:
+
+```markdown
+# J01-onboarding-and-first-play — отчёт о генерации pytest-тестов
+
+**Дата:** 2026-07-28
+**Источник:** output/suites/J01-onboarding-and-first-play.md
+**Базовые кейсы:** output/cases/J01-onboarding-and-first-play/
+
+## Результат прогона
+
+| Всего тестов | PASS | SKIP | FAIL |
+|---|---|---|---|
+| 32 | 27 | 5 | 0 |
+
+## Покрытие
+
+| Кейс | Шагов | Статус |
+|---|---|---|
+| TC-J01-00 — Основной счастливый путь | 10 | PASS |
+| TC-J01-01 — Повторная отправка кода (таймер) | 2 | SKIP |
+| TC-J01-02 — Неверный код | 3 | SKIP |
+| TC-J01-03 — < 3 жанров | 2 | PASS |
+| TC-J01-04 — Пустой поиск | 2 | PASS |
+
+## Пропущенные тесты (BLOCKER)
+
+| Кейс | Шаг | Причина skip | Уточняющий вопрос |
+|---|---|---|---|
+| TC-J01-01 | 04 | REQ-01 не определяет UI таймера и неактивной кнопки | вопрос 2 |
+| TC-J01-02 | 04 | REQ-01 не определяет поведение при неверном коде | вопрос 1 |
+
+## Allure
+
+```bash
+pytest output/tests/J01-onboarding-and-first-play/ --alluredir=allure-results
+allure serve allure-results
+```
+```
+
+### Запуск
 
 ## Формат выдачи
 
