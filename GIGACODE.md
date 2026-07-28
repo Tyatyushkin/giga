@@ -198,3 +198,6 @@ def test_timer_visual():
 >>>>>>> 79bf56960b697e9552e967a349fb726f83fcdf55
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
+
+## GigaCode Added Memories
+- BASE_URL = "https://zvuk.com/" — для всех pytest/Selenium тестов

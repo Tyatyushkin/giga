@@ -314,6 +314,155 @@ class TestEdgeCases:
         ...
 ```
 
+## Selenium — визуальное тестирование браузера (E2E через WebDriver)
+
+Если в задании указан `--selenium` или в требованиях есть описание визуального интерфейса (UI-элементы, навигация, страницы), ты пишешь **браузерные тесты**.
+
+### Инфраструктура
+
+Тесты используют `pytest-selenium` и `webdriver-manager`.
+
+**Базовый URL** — конфигурируется через `test_data.py`. В реальном коде — `test_data.BASE_URL`:
+
+```python
+# test_data.py
+from typing import Final
+
+BASE_URL: Final[str] = "https://zvuk.com/"         # продакшн-адрес (указал пользователь)
+```
+
+Все тесты используют `test_data.BASE_URL`, никогда не хардкодят.
+
+**Правило:** Selenium-тест никогда не пишет `localhost` в коде. Если `BASE_URL` не совпадает с продакшном — тест не запускается (падает с `skip`):
+
+```python
+@pytest.fixture(scope="session")
+def base_url() -> str:
+    return "https://zvuk.com/"           # строго по заданию пользователя
+```
+
+**Локальный мок:** если нужно отлаживать — `conftest.py` проверяет:
+
+```python
+@pytest.fixture(scope="session")
+def base_url() -> str:
+    return "https://zvuk.com/"           # определён пользователем
+```
+
+Сам `conftest.py`:
+
+```python
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+```
+
+Фикстура `driver` — в `conftest.py`:
+
+```python
+import pytest
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+@pytest.fixture(scope="function")
+def driver():
+    options = Options()
+    options.add_argument("--headless=new")          # без GUI
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.set_capability("goog:loggingPrefs", {
+        "browser": "ALL"                             # лог консоли браузера
+    })
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
+    yield driver
+    driver.quit()
+```
+
+### Allure + Selenium
+
+Для автоматической фиксации скриншотов на `FAIL`:
+
+```python
+import allure
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.when == "call" and report.failed:
+        if "driver" in item.funcargs:
+            driver = item.funcargs["driver"]
+            allure.attach(
+                driver.get_screenshot_as_png(),
+                name="screenshot",
+                attachment_type=allure.attachment_type.PNG
+            )
+```
+
+### Скриншоты-эталоны
+
+Для визуального регресса (`--visual-regression`):
+
+```python
+from selenium.webdriver.common.by import By
+
+def capture_element_screenshot(driver, selector: str, name: str):
+    """Сделать скриншот элемента и прикрепить к Allure."""
+    element = driver.find_element(By.CSS_SELECTOR, selector)
+    screenshot = element.screenshot_as_png()
+    allure.attach(screenshot, name=name, attachment_type=allure.attachment_type.PNG)
+    return element
+```
+
+### Структура Selenium-теста
+
+```python
+@allure.id("J01-TC-J01-00-03")
+@allure.label("layer", "visual")
+@allure.severity(allure.severity_level.CRITICAL)
+@allure.title("Проверка отображения кнопки «Отправить код»")
+@allure.description("После ввода номера телефона кнопка должна быть активна")
+def test_submit_button_active(self, driver):
+    driver.get("http://localhost:3000/login")
+    # Ждём появления поля ввода
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "phone"))
+    )
+    phone_input = driver.find_element(By.ID, "phone")
+    phone_input.send_keys("+79990000011")
+    # Кнопка должна стать активной
+    submit_btn = driver.find_element(By.CSS_SELECTOR, "#submit-code")
+    assert submit_btn.is_enabled(), "Кнопка должна быть активна после ввода номера"
+    # Скриншот для отчёта
+    capture_element_screenshot(driver, "#submit-code", "Кнопка отправки кода")
+```
+
+### Маркеры Selenium
+
+```python
+# pytest.ini
+[pytest]
+markers =
+    visual: визуальный тест браузера (требуется Selenium + --headless)
+    selenium: тест через WebDriver (устанавливается автоматически)
+    screenshot_on_fail: делать скриншот при падении теста
+```
+
+### Правила Selenium-тестов
+
+1. **Не мешай с API-стабом**. Если тест использует реальный браузер — `driver` вместо `api_client`. Не используй `ZvukApiStub` вместе с `driver`.
+2. **Wait-ы вместо sleep**. Никогда не используй `time.sleep()`. Всегда `WebDriverWait` + `expected_conditions`.
+3. **Один шаг = один assert**. Каждый шаг проверяет ровно одно состояние UI-элемента.
+4. **Скриншот на FAIL**. Хук `pytest_runtest_makereport` прикрепляет скриншот к Allure.
+5. **One-shot скриншоты**. Каждый тест делает скриншот на финальном `assert`, прикрепляет к Allure и сохраняет в `allure-results/` как отдельный файл PNG.
+
 ## Важно
 
 Если ты не уверен в каком-либо требовании или спецификации — **всегда уточняй**. Лучше потратить время на уточнение, чем написать неправильные тесты. Твоя цель — написать такие тесты, чтобы при их прогоне можно было с уверенностью сказать: "код соответствует документации".

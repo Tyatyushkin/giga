@@ -1,165 +1,58 @@
 """
-Глобальные фикстуры для тестового пакета J02-offline-download-and-network.
+conftest.py — глобальные фикстуры для Selenium-тестов J02 (офлайн)
 
-Предоставляет:
-- api_client — базовый HTTP-клиент к сервису «Звук»
-- authenticated_client — клиент с авторизованным пользователем (Premium)
-- unauthenticated_client — клиент без подписки (Free)
-- playlist_data — предсозданный плейлист
-- queue_data — очередь воспроизведения
+Основание: требования zvuk.md, zvuk-sample.md, _answers.md
 """
 
 import pytest
-import os
-import json
-from typing import Dict, List, Optional, Any
+import allure
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-from api_stub import ZvukAPIClient
-
-
-# ---------------------------------------------------------------------------
-# Пути к тестовым данным и API-заглушкам
-# ---------------------------------------------------------------------------
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-TEST_DATA_DIR = os.path.join(PROJECT_ROOT, "test_data")
+BASE_URL: str = "https://zvuk.com/"
 
 
-# ---------------------------------------------------------------------------
-# pytest-маркеры — регистрация в pytest.ini
-# ---------------------------------------------------------------------------
-def pytest_configure(config):
-    """Регистрация кастомных маркеров."""
-    config.addinivalue_line("markers", "e2e: end-to-end тест (основной путь)")
-    config.addinivalue_line("markers", "smoke: базовая проверка работоспособности")
-    config.addinivalue_line("markers", "regression: проверка регрессии")
-    config.addinivalue_line("markers", "blocker: тест помечен как блокирующий")
-    config.addinivalue_line("markers", "unit: юнит-тест")
-    config.addinivalue_line("markers", "integration: интеграционный тест")
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: заглушка API-клиента (детерминированная эмуляция)
-# ---------------------------------------------------------------------------
-@pytest.fixture(autouse=True)
-def _reset_api_client():
-    """Автоматический сброс API-клиента — выполняется перед каждым тестом."""
-    pass
-
-
-@pytest.fixture
-def api_client() -> ZvukAPIClient:
+@pytest.fixture(scope="function")
+def driver():
     """
-    Детерминированный API-клиент сервиса «Звук».
+    Фикстура Headless Chrome для офлайн-тестов.
+
+    Использует webdriver-manager для автоматической установки ChromeDriver.
+    Окно 1920x1080 для детерминированного рендеринга.
     """
-    client = ZvukAPIClient()
-    client.reset()
-    return client
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
+    driver.implicitly_wait(5)
+    yield driver
+    driver.quit()
 
 
-# ---------------------------------------------------------------------------
-# Фикстура: авторизованный пользователь с подпиской (Premium)
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def authenticated_client(api_client: ZvukAPIClient) -> ZvukAPIClient:
-    """
-    Настраивает клиент как авторизованного пользователя с активной подпиской Premium.
-    """
-    api_client.reset()
-    api_client.authenticate(user_id="premium@test.ru", subscription_tier="premium")
-    return api_client
+@pytest.fixture(scope="function")
+def base_url() -> str:
+    return BASE_URL
 
 
-# ---------------------------------------------------------------------------
-# Фикстура: авторизованный пользователь без подписки (Free)
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def unauthenticated_client(api_client: ZvukAPIClient) -> ZvukAPIClient:
-    """
-    Настраивает клиент как авторизованного пользователя без подписки (Free-тариф).
-    """
-    api_client.reset()
-    api_client.authenticate(user_id="free@test.ru", subscription_tier="free")
-    return api_client
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: предсозданный плейлист
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def playlist_data() -> Dict[str, Any]:
-    """
-    Возвращает данные плейлиста, созданного на этапе 7 основного пути.
-    """
-    return {
-        "id": "pl-001",
-        "name": "Тестовый плейлист 2026-07",
-        "created_at": "2026-07-28T10:00:00Z",
-        "track_count": 0,
-        "tracks": [],
-        "offline_available": False,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: очередь воспроизведения
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def queue_data() -> List[Dict[str, Any]]:
-    """
-    Очередь воспроизведения после добавления второго трека.
-    """
-    return [
-        {"title": "Весна", "artist": "Дельфин", "position": 1},
-        {"title": "Голос", "artist": "Дельфин", "position": 2},
-    ]
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: данные трека для воспроизведения
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def track_data() -> Dict[str, Any]:
-    """
-    Данные трека «Весна — Дельфин», используемого в основном сценарии.
-    """
-    return {
-        "title": "Весна",
-        "artist": "Дельфин",
-        "duration_seconds": 180,
-        "current_position": "01:23",
-    }
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: поисковый запрос
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def search_query() -> str:
-    """Поисковый запрос для основного сценария."""
-    return "Дельфин"
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: состояние сети (стабильное / обрыв / восстановление)
-# ---------------------------------------------------------------------------
-@pytest.fixture(params=["stable", "disconnected", "reconnected"])
-def network_state(request) -> str:
-    """
-    Параметризованная фикстура для тестов с разными состояниями сети.
-    """
-    return request.param
-
-
-# ---------------------------------------------------------------------------
-# Фикстура: журнал попыток переподключения
-# ---------------------------------------------------------------------------
-@pytest.fixture
-def reconnection_log() -> List[Dict[str, Any]]:
-    """
-    Журнал попыток переподключения (3 попытки по 10 секунд).
-    """
-    return [
-        {"attempt": 1, "status": "failed", "timestamp": "2026-07-28T10:01:23Z"},
-        {"attempt": 2, "status": "failed", "timestamp": "2026-07-28T10:01:33Z"},
-        {"attempt": 3, "status": "failed", "timestamp": "2026-07-28T10:01:43Z"},
-    ]
+# --- Хук для скриншота на FAIL ---
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.when == "call" and report.failed:
+        if "driver" in item.funcargs:
+            driver = item.funcargs["driver"]
+            allure.attach(
+                driver.get_screenshot_as_png(),
+                name="screenshot_fail",
+                attachment_type=allure.attachment_type.PNG,
+            )
