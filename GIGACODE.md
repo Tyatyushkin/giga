@@ -151,6 +151,37 @@ And writes:
 4. **Data from constants.** No literals in test code.
 5. **API stub is deterministic.** Returns the same thing for the same input — no flaky tests.
 
+**Allure-разметка:** см. `.gigacode/agents/pytest-test-writer.md` — раздел «Allure-разметка».
+
+**Report in `output/tests/README.md`:**
+
+After generation, the agent **appends** a summary to `output/tests/README.md`:
+
+```markdown
+## <JOURNEY_ID> — pytest generation
+
+| Вердикт | Всего | PASS | SKIP | FAIL |
+|---|---|---|---|---|
+| `PASS` | N | N | M | 0 |
+| `NEEDS_HUMAN` | N | N | M | 0 |
+```
+
+- **Всего тестов** — количество `test_` функций
+- **PASS** — тесты, чей expected result определён в REQ
+- **SKIP** — `@pytest.mark.skip` из-за выдуманного поведения (BLOCKER)
+- **FAIL** — 0 (детерминированная эмуляция)
+
+Каждый SKIP содержит ссылку на пробел и номер вопроса из уточняющего списка.
+Пример:
+
+```python
+@pytest.mark.skip(
+    reason="BLOCKER: REQ-01 не определяет UI таймера. "
+           "Уточняющий вопрос 2: что видит пользователь при неактивной кнопке?"
+)
+def test_timer_visual():
+    ...
+```
 **Exit:** After all writer agents finish, the orchestrator reports:
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
