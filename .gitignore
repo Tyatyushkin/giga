@@ -1,8 +1,11 @@
+# output/ целиком — результат прогона фабрики, а не исходник.
+# В репозитории лежит генератор: агенты, команды, скрипты, шаблоны.
 output/cases/
 output/suites/
 output/reviews/
 output/state/
 output/gate/
+output/tests/
 output/state.json
 output/report.md
 __pycache__/
