@@ -47,7 +47,7 @@ input/requirements/*.md
 ```bash
 cd zvuk-e2e-agents
 gigacode                       # start the CLI in the project root
-/agents                    # confirm the three project subagents are loaded
+/agents                    # confirm the five project subagents are loaded
 /e2e:run                   # full loop over input/requirements/*.md
 ```
 
