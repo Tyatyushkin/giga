@@ -202,6 +202,14 @@ def test_03_submit_button_active(self, driver, base_url):
 | … | … | … | … |
 ```
 
+Прогон — с явным каталогом результатов внутри своего journey, чтобы ничего не создавалось
+в корне репозитория и результаты не смешивались с чужими:
+
+```bash
+E2E_BASE_URL=<адрес> python3 -m pytest output/tests/<JOURNEY_ID>/test_browser_<jid>.py \
+  --alluredir=output/tests/<JOURNEY_ID>/allure-results
+```
+
 Правила те же, что у `pytest-stub-writer`, и они здесь строже, потому что браузерный прогон
 зависит от внешнего стенда:
 

@@ -7,3 +7,8 @@ output/state.json
 output/report.md
 __pycache__/
 *.pyc
+
+# Артефакты прогона pytest — порождаются запуском, в репозиторий не входят
+allure-results/
+.pytest_cache/
+pytest.log

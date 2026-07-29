@@ -163,11 +163,16 @@ def test_04_timer_visual(self, api_client):
 
 1. Прочитай план сьюты, все кейсы и последнее ревью своего journey.
 2. Напиши `data_<jid>.py`, `api_stub_<jid>.py`, `conftest.py`, `test_<jid>.py`.
-3. Запусти тесты и сохрани вывод:
+3. Запусти тесты и сохрани вывод. Каталог результатов Allure — **внутри своего journey**,
+   путь задаётся явно; в корне репозитория ничего не создаётся:
 
    ```bash
-   python3 -m pytest output/tests/<JOURNEY_ID>/ -v --tb=short
+   python3 -m pytest output/tests/<JOURNEY_ID>/ \
+     --alluredir=output/tests/<JOURNEY_ID>/allure-results
    ```
+
+   Относительный `--alluredir=allure-results` не годится: он резолвится от текущего каталога,
+   а не от корня проекта, и результаты разных journey попадут в одну кучу или в корень.
 
 4. Если есть падения — чини **код теста или стаба**, а не ожидания из кейса. Падение, которое
    нельзя починить, не изменив ожидаемый результат, — это находка: оставь тест падающим и внеси
@@ -220,8 +225,9 @@ def test_04_timer_visual(self, api_client):
 ## Allure
 
 ```bash
-python3 -m pytest output/tests/<JOURNEY_ID>/
-allure serve allure-results
+python3 -m pytest output/tests/<JOURNEY_ID>/ \
+  --alluredir=output/tests/<JOURNEY_ID>/allure-results
+allure serve output/tests/<JOURNEY_ID>/allure-results
 ```
 ```
 
