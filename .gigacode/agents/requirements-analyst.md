@@ -11,7 +11,7 @@ tools:
 modelConfig:
   temperature: 0.2
 runConfig:
-  max_turns: 25
+  max_turns: 40
 color: cyan
 ---
 
@@ -28,12 +28,37 @@ invent product behaviour.
   remove the gap and question it resolves.
 - Format contract: `docs/format.md`. Project rules: `GIGACODE.md`.
 
-## Step 0 — index the requirements
+## Step 0 — read once, index by script
 
-Read every requirement file. Build an internal index of atomic requirement statements with anchors
-`REQ-01`, `REQ-02`, … If the source file already numbers its requirements, reuse those numbers
-exactly. If it does not, assign numbers in reading order and write the index into every suite plan
-you produce, so downstream agents resolve the same anchors.
+**Read every input file in ONE batched call** (`read_many_files`, or all reads emitted in a single
+message). Do not read them one at a time and do not go back to the sources later — each extra round
+trip re-processes the whole growing context before you have thought about anything.
+
+**Do not type the requirement index by hand.** Run:
+
+```bash
+python3 scripts/extract_reqs.py [--prefix BR,REQ]
+```
+
+It writes `output/suites/_reqindex.json` — one record per numbered statement: `id`, verbatim
+`text`, `source` (`<file>.md § раздел`). Numbering was never your decision: the rule has always
+been «reuse the source numbers exactly», which makes this extraction, not judgement.
+
+Two things still need your eyes:
+
+- **A corpus often numbers more than requirements.** The summary groups ids by prefix with the
+  section each came from — business goals, assumptions and risks get ids too, and they are not
+  testable behaviour. Narrow with `--prefix`, and say in your summary which prefixes you treated
+  as requirements.
+- **Statements the script cannot see.** A requirement expressed in prose with no id — an answer in
+  `_answers.md`, for instance — is real but unextractable. Add it yourself with the next free
+  number and mark it in your summary, so the human knows part of the numbering is yours.
+
+If a source numbers nothing at all, the script finds nothing — fall back to reading and assigning
+numbers in reading order.
+
+The per-journey «Индекс требований» section is produced by the same script — see Step 2. You never
+retype requirement text into a plan.
 
 ## Step 1 — find the journeys
 
@@ -58,6 +83,18 @@ Rules:
 ## Step 2 — for each journey, write the plan
 
 Write to `output/suites/<JOURNEY_ID>.md` in **Russian**, using `templates/suite-plan.md`.
+
+**The «Индекс требований» section is generated, not written.** Once you know the journey's anchors:
+
+```bash
+python3 scripts/extract_reqs.py --markdown --only REQ-01,REQ-04,REQ-07
+```
+
+Paste the output verbatim. Plans repeat these rows on purpose — parallel designers never see each
+other, so a plan pointing at another file is not self-sufficient — but that duplication is a copy,
+not an act of writing. Do not shorten the formulations: a précis is where a requirement quietly
+loses the detail a case later needs.
+
 Mandatory content:
 
 1. **Цель journey** — the user goal, one sentence.

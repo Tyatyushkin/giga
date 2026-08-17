@@ -71,7 +71,6 @@ VAGUE = [
 PLACEHOLDERS = [
     "todo",
     "tbd",
-    "<",
     "xxx",
     "заполнить",
     "любой трек",
@@ -80,6 +79,13 @@ PLACEHOLDERS = [
     "n/a",
     "нужно уточнить у себя",
 ]
+
+# An unfilled slot is a *pair* of angle brackets around a short label:
+# <название плейлиста>, <track>. A lone "<" is arithmetic — «время отклика < 2 сек»,
+# «лимит < 100» — and blocking it made every comparison a false BLOCKER, which the
+# critic is forbidden to argue with (docs/critic-rubric.md), so a correct case lost
+# a whole design+review iteration.
+PLACEHOLDER_SLOT = re.compile(r"<[^<>\s][^<>]{0,58}>")
 
 # Markers of more than one action inside a single step.
 MULTI_ACTION = [
@@ -171,6 +177,9 @@ def has_placeholder(value: str) -> str | None:
     for p in PLACEHOLDERS:
         if p in low:
             return p
+    slot = PLACEHOLDER_SLOT.search(value)
+    if slot:
+        return slot.group(0)
     return None
 
 
