@@ -51,6 +51,43 @@ python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/review
 Merge linter findings into your report, keeping their severity. Never contradict the linter on
 structural facts (missing sections, placeholders, broken numbering).
 
+**The linter always runs over every case.** It costs milliseconds; scoping it would save nothing
+and lose the structural floor.
+
+### 1.5. Scope of this iteration
+
+```bash
+python3 scripts/review_scope.py --journey <JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-scope.json
+```
+
+On iteration 1 it returns «полное ревью» and you proceed as normal. On a fix iteration it tells
+you which cases actually changed, so passes 2–5 below are spent on those instead of re-confirming
+what you already confirmed.
+
+The rules are fail-closed — it widens the scope whenever it cannot prove otherwise:
+
+| Что изменилось | Что переревьюивается |
+|---|---|
+| требования, `_answers.md`, рубрика, критерии, формат | **всё** |
+| план сьюты | **всё** |
+| основной кейс | он **и все варианты** — они наследуют его предусловия |
+| один вариант | только он |
+| базы хешей нет | **всё** |
+
+**Carried-forward findings are not dropped — they are reprinted.** Your report must list them
+verbatim under their original numbering with the marker «перенесено с итерации N-1», and your
+state file counts them in `blockers` / `majors` / `minors` exactly as if you had re-derived them.
+A finding that silently disappears because its case was not re-read is the one failure mode this
+step must never produce.
+
+After the review is written and its verdict is final:
+
+```bash
+python3 scripts/review_scope.py --journey <JOURNEY_ID> --update
+```
+
+Only then — the baseline must record the state you actually reviewed, not the state you found.
+
 ### 2. Traceability pass
 
 For each expected result in each case, find the requirement that defines it.
