@@ -15,13 +15,10 @@ Cases currently on disk:
 
 !{find output/cases -name '*.md' 2>/dev/null | sort || echo "NO CASES — run /e2e:design first"}
 
-Prompt each subagent with:
-- its case directory, its suite plan path, the requirement file paths
-  (including `input/requirements/_answers.md` if present — answers there rank as requirements)
-- `docs/critic-rubric.md`, `docs/quality-criteria.md`, `docs/format.md`
-- the review output path `output/reviews/<JOURNEY_ID>-iter<N>.md`
-- the state output path `output/state/<JOURNEY_ID>.json`, and "never write `output/state.json`"
-- the instruction to run `scripts/validate_cases.py` first and merge its findings
+Build each prompt by the briefing protocol below — row `test-critic`. From iteration 2 on,
+add the `review_scope.py` wording verbatim.
+
+!{python3 scripts/include_skill.py subagent-briefing --level 2}
 
 When they finish, print each verdict line and blocker list verbatim, then one summary line per
 journey: `J01 iter2: BLOCKER 1, MAJOR 3, MINOR 2`. If any verdict is FIX_REQUIRED, give me the exact

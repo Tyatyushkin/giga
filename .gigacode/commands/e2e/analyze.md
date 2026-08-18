@@ -10,10 +10,9 @@ Available requirement files:
 
 !{ls -1 input/requirements/ 2>/dev/null || echo "NO REQUIREMENTS FOUND"}
 
-Prompt the subagent with:
-- the exact requirement file paths to read (include `input/requirements/_answers.md` if it exists)
-- the contract files: `docs/format.md`, `GIGACODE.md`, `templates/suite-plan.md`
-- the output directory: `output/suites/`, and the machine index `output/suites/_index.json`
+Build the prompt by the briefing protocol below — row `requirements-analyst`.
+
+!{python3 scripts/include_skill.py subagent-briefing --level 2}
 
 When it finishes, read `output/suites/_index.json` and the produced plans, then show me a table:
 journey id, title, stages, functional areas crossed, variants, gaps, questions, plan path. Flag any

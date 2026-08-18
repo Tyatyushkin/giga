@@ -103,8 +103,9 @@ question it would have asked into `output/report.md` under «Требуются 
 .gigacode/agents/       requirements-analyst.md, qa-designer.md, test-critic.md,
                         pytest-stub-writer.md, browser-test-writer.md
 .gigacode/commands/e2e/ run.md, analyze.md, design.md, review.md, status.md
-.gigacode/skills/       human-gate.md, requirements-gate.md, pytest-generation.md —
-                        procedures shared by several commands, inlined with
+.gigacode/skills/       human-gate.md, subagent-briefing.md, requirements-gate.md,
+                        journey-pipeline.md, pytest-generation.md — procedures shared by
+                        several commands, inlined with
                         `!{python3 scripts/include_skill.py <name> --level N}`
 GIGACODE.md             project context loaded into every session
 docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
