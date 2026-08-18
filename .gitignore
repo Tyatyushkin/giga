@@ -18,3 +18,6 @@ __pycache__/
 allure-results/
 .pytest_cache/
 pytest.log
+
+# macOS
+.DS_Store
