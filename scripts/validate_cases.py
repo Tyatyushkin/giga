@@ -305,6 +305,12 @@ def check_case(path: Path, findings: list[Finding]) -> None:
             "Развернуть путь до полного journey по suite-плану")
 
     steps_text = " ".join(" ".join(r) for r in step_rows).lower()
+    # Markdown markers stripped for substring matching below: a value written as
+    # `https://host:8443` in the data table appears inside `https://host:8443/path`
+    # in a step, and the trailing backtick made the literal token miss. Third
+    # instance of a linter rule reporting a defect the case does not have —
+    # after "<" arithmetic and "n/a" inside admi·n/a·pi.
+    steps_text_plain = normalize_cell(steps_text).lower()
 
     for idx, row in enumerate(step_rows, start=1):
         loc = f"Шаги / шаг {idx}"
@@ -369,10 +375,10 @@ def check_case(path: Path, findings: list[Finding]) -> None:
     # --- data usage & continuity ----------------------------------------
     used = 0
     for value in data_values:
-        token = value.lower().strip()
+        token = normalize_cell(value).lower().strip()
         if len(token) < 3:
             continue
-        if token in steps_text:
+        if token in steps_text_plain:
             used += 1
         else:
             add("MAJOR", "data-unused", "Тестовые данные",
