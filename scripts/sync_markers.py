@@ -82,6 +82,10 @@ def main() -> int:
     ap.add_argument("--index", default="output/suites/_index.json")
     ap.add_argument("--ini", default="pytest.ini")
     ap.add_argument("--check", action="store_true", help="только проверить, ничего не писать")
+    ap.add_argument("--prune", action="store_true",
+                    help="удалить J<NN>-маркеры, у которых нет journey в индексе "
+                         "(по умолчанию они только перечисляются: индекс другого прогона "
+                         "не повод терять чужие строки)")
     args = ap.parse_args()
 
     index, ini = Path(args.index), Path(args.ini)
@@ -114,11 +118,11 @@ def main() -> int:
         mark = "НЕТ    " if name in {n for n, _ in missing} else (
             "устарел" if name in {n for n, _ in outdated} else "есть   ")
         print(f"[markers] {mark} {name}")
-    if orphan:
-        print(f"[markers] маркеры без journey: {', '.join(orphan)} — не удаляю, "
-              f"прогон их не использует")
+    if orphan and not args.prune:
+        print(f"[markers] маркеры без journey: {', '.join(orphan)} — не удаляю "
+              f"(нужен --prune), прогон их не использует")
 
-    if not missing and not outdated:
+    if not missing and not outdated and not (orphan and args.prune):
         print("[markers] реестр совпадает с индексом journey")
         return 0
 
@@ -130,6 +134,14 @@ def main() -> int:
             print(f"[markers] описание разошлось с индексом: "
                   f"{', '.join(n for n, _ in outdated)}")
         return 1
+
+    if args.prune and orphan:
+        for name in orphan:
+            lines[have[name]] = None  # type: ignore[call-overload]
+        lines = [l for l in lines if l is not None]
+        # line indices shifted — recompute before the in-place edits below
+        have, insert_at = registered(lines)
+        print(f"[markers] удалено: {', '.join(orphan)}")
 
     for name, desc in outdated:
         lines[have[name]] = f"    {name}: {desc}"

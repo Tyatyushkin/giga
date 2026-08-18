@@ -97,8 +97,13 @@ agent(qa-designer) → agent(test-critic) → check_state → решение
 
 ```json
 { "maxIterations": 3, "parallel": 3, "unit": "journey",
-  "journeys": { "J01": {} }, "verdict": "…" }
+  "journeys": { "J01-<slug>": {} }, "verdict": "…" }
 ```
+
+Ключи `journeys` — **полные id**, те же, что имена файлов в `output/state/`:
+`scripts/check_state.py` сверяет агрегат с этим каталогом и считает недостающий ключ
+потерянным journey. Проверяйте агрегат тем же вызовом, что и файлы критиков, — он входит
+в проверку по умолчанию, когда `output/state.json` существует.
 
 Фаза считается завершённой, когда батч и очередь пусты и каждый journey имеет вердикт
 `PASS`, `NEEDS_HUMAN` или `FAILED`.

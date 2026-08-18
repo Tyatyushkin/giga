@@ -191,6 +191,18 @@ def vague_hit(value: str) -> str | None:
     return None
 
 
+def normalize_cell(value: str) -> str:
+    """Markdown cell and JSON string, reduced to comparable text.
+
+    Strips emphasis markers and collapses whitespace — nothing more. The point is to
+    catch a JSON twin whose *content* drifted from the Markdown, not to punish a
+    designer for `**bold**`. Anything this normalization cannot equate is a real
+    difference in wording, and per the format contract the two must be
+    «содержательно идентичны».
+    """
+    return " ".join(value.replace("**", "").replace("`", "").replace("*", "").split())
+
+
 def section_is_empty(body: str) -> bool:
     stripped = re.sub(r"[-*\s—\d.]", "", body)
     return stripped == ""
@@ -396,6 +408,28 @@ def check_case(path: Path, findings: list[Finding]) -> None:
                 add("BLOCKER", "json-steps-mismatch", str(json_path.name),
                     f"Шагов в JSON {len(data.get('steps', []))}, в Markdown {len(step_rows)}",
                     "Синхронизировать JSON с Markdown")
+            else:
+                # Same count is necessary, not sufficient: the id/count checks pass while
+                # a step's wording silently diverges, and downstream the JSON is what the
+                # pytest writer consumes. MAJOR, not BLOCKER — the normalization is
+                # deliberately shallow, and a false BLOCKER costs a design+review
+                # iteration (the O-05 lesson).
+                fields = (("action", 1, "действие"),
+                          ("testData", 2, "тестовые данные"),
+                          ("expectedResult", 3, "ожидаемый результат"))
+                for idx, (jstep, row) in enumerate(zip(data["steps"], step_rows), start=1):
+                    if not isinstance(jstep, dict) or len(row) != 4:
+                        continue
+                    for key, col, label in fields:
+                        md_val = normalize_cell(row[col])
+                        js_val = normalize_cell(str(jstep.get(key, "")))
+                        if md_val != js_val:
+                            add("MAJOR", "json-step-drift",
+                                f"{json_path.name} / шаг {idx}",
+                                f"{label} в JSON расходится с Markdown: "
+                                f"«{js_val[:60]}» ≠ «{md_val[:60]}»",
+                                "Синхронизировать JSON с Markdown — содержательно идентичны")
+                            break  # одного расхождения на шаг достаточно
 
 
 def collect(target: Path) -> list[Path]:

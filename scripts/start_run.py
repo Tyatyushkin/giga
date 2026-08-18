@@ -46,8 +46,11 @@ RUN_FILE = OUT / ".run"
 PREVIOUS = OUT / ".previous"
 
 # Everything a run produces. Kept explicit: a glob would sweep .run and .previous too.
+# pending.md was added to the contract one commit after this list was written and
+# promptly missed — questions skipped by the previous run leaked into the next run's
+# report. If a phase starts writing a new file under output/, it belongs here too.
 ARTEFACTS = ["suites", "cases", "reviews", "state", "gate", "tests",
-             "state.json", "report.md"]
+             "state.json", "report.md", "pending.md"]
 
 
 def read_run() -> dict | None:
