@@ -11,6 +11,8 @@ fail-closed: anything it cannot prove unchanged goes back for a full review.
 
 Invalidation rules
 ------------------
+run id changed or absent        -> everything (a baseline from another run proves
+                                   nothing about this one; absence means unknown)
 requirements / answers changed  -> everything (behaviour was redefined)
 suite plan changed              -> everything (the journey's scope moved)
 rubric / criteria / format      -> everything (the rules of judgement moved)
@@ -41,7 +43,12 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8")
 
 # Changing any of these re-opens every case: they define behaviour or how it is judged.
+# output/.run is here so a baseline cannot outlive the run that produced it — see
+# scripts/start_run.py. Its absence is handled separately, and also means full review.
+RUN_FILE = "output/.run"
+
 GLOBAL_INPUTS = [
+    RUN_FILE,
     "input/requirements",
     "docs/critic-rubric.md",
     "docs/quality-criteria.md",
@@ -66,6 +73,17 @@ def hash_tree(target: Path) -> dict[str, str]:
         if p.is_file() and p.suffix in (".md", ".json"):
             out[str(p)] = digest(p)
     return out
+
+
+def current_run_id() -> str | None:
+    """Read the run id verbatim, so invalidation does not rest on a hash alone."""
+    path = Path(RUN_FILE)
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("runId")
+    except json.JSONDecodeError:
+        return None
 
 
 def global_fingerprint() -> dict[str, str]:
@@ -108,6 +126,7 @@ def main() -> int:
 
     current = {
         "journeyId": jid,
+        "runId": current_run_id(),
         "global": global_fingerprint(),
         "plan": digest(plan) if plan.is_file() else None,
         "cases": case_fingerprints(case_dir),
@@ -126,8 +145,14 @@ def main() -> int:
     all_cases = sorted(current["cases"])
     reason_global: str | None = None
 
-    if baseline is None:
+    if not Path(RUN_FILE).is_file():
+        reason_global = ("нет идентификатора прогона (output/.run) — "
+                         "неизвестно, к какому прогону относится база")
+    elif baseline is None:
         reason_global = "базы нет — первая итерация или база нечитаема"
+    elif baseline.get("runId") != current["runId"]:
+        reason_global = (f"база от другого прогона ({baseline.get('runId')}), "
+                         f"текущий {current['runId']}")
     elif baseline.get("global") != current["global"]:
         reason_global = "изменились требования или правила оценки"
     elif baseline.get("plan") != current["plan"]:

@@ -111,9 +111,11 @@ GIGACODE.md             project context loaded into every session
 docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
 templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
 input/requirements/     your source requirements (sample «Звук» included) + _answers.md
-output/                 suites/, cases/, reviews/, tests/, state/<journey>.json, state.json, report.md
+output/                 suites/, cases/, reviews/, tests/, state/<journey>.json, state.json,
+                        report.md, .run (run identity), .previous/ (last run's artefacts)
 scripts/                validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
-                        build_gate_questions.py, gate_check.py, include_skill.py
+                        build_gate_questions.py, gate_check.py, include_skill.py,
+                        start_run.py, sync_markers.py
 examples/               a fully worked journey plan + case, useful as a reference and smoke test
 ```
 
