@@ -33,5 +33,8 @@ gaps and questions raised, and the linter result.
 
 Then list the gaps and questions the designers raised while writing steps — these are new, the
 analyst did not have them — and ask me whether to answer them now (into
-`input/requirements/_answers.md`) or carry them into the review as declared gaps. Use the interactive
-question tool your runtime exposes; if there is none, print the options and stop your turn.
+`input/requirements/_answers.md`) or carry them into the review as declared gaps.
+
+Ask via the question protocol below — mode B, you compose the options yourself:
+
+!{python3 scripts/include_skill.py human-gate --level 2}

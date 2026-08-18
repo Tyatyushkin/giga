@@ -100,15 +100,20 @@ question it would have asked into `output/report.md` under «Требуются 
 ## Layout
 
 ```
-.gigacode/agents/         requirements-analyst.md, qa-designer.md, test-critic.md
-.gigacode/commands/e2e/   run.md, analyze.md, design.md, review.md, status.md
-GIGACODE.md               project context loaded into every session
-docs/                 format.md, quality-criteria.md, critic-rubric.md, examples.md
-templates/            suite-plan.md, test-case.md, test-case.json, review-report.md
-input/requirements/   your source requirements (sample «Звук» included) + _answers.md when you answer
-output/               suites/, cases/, reviews/, state/<journey>.json, state.json, report.md
-scripts/              validate_cases.py — deterministic linter
-examples/             a fully worked journey plan + case, useful as a reference and smoke test
+.gigacode/agents/       requirements-analyst.md, qa-designer.md, test-critic.md,
+                        pytest-stub-writer.md, browser-test-writer.md
+.gigacode/commands/e2e/ run.md, analyze.md, design.md, review.md, status.md
+.gigacode/skills/       human-gate.md, requirements-gate.md, pytest-generation.md —
+                        procedures shared by several commands, inlined with
+                        `!{python3 scripts/include_skill.py <name> --level N}`
+GIGACODE.md             project context loaded into every session
+docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
+templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
+input/requirements/     your source requirements (sample «Звук» included) + _answers.md
+output/                 suites/, cases/, reviews/, tests/, state/<journey>.json, state.json, report.md
+scripts/                validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
+                        build_gate_questions.py, gate_check.py, include_skill.py
+examples/               a fully worked journey plan + case, useful as a reference and smoke test
 ```
 
 ## The linter

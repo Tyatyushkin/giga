@@ -30,3 +30,7 @@ journey: `J01 iter2: BLOCKER 1, MAJOR 3, MINOR 2`. If any verdict is FIX_REQUIRE
 Finally, list the requirements the critics found unchecked and the questions still open, per journey.
 Do not bury them in the review file: if coverage is incomplete, say which `REQ-XX` and ask me whether
 to answer the blocking questions now or accept the gap.
+
+Ask via the question protocol below — mode B, you compose the options yourself:
+
+!{python3 scripts/include_skill.py human-gate --level 2}
