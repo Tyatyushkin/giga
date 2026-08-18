@@ -175,7 +175,10 @@ def parse_fields(block: str) -> dict[str, str]:
 def has_placeholder(value: str) -> str | None:
     low = value.lower()
     for p in PLACEHOLDERS:
-        if p in low:
+        # Word boundaries, same as vague_hit: a bare substring match turned every
+        # Admin API URL into a BLOCKER — «admi·n/a·pi» contains "n/a" — and the
+        # designer worked around the linter with code spans instead of writing cases.
+        if re.search(rf"(?<![a-zа-я0-9]){re.escape(p)}(?![a-zа-я0-9])", low):
             return p
     slot = PLACEHOLDER_SLOT.search(value)
     if slot:
