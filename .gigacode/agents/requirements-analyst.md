@@ -70,6 +70,14 @@ Rules:
 
 - A journey has **at least 5 stages** and crosses **at least 3 functional areas**.
   A single-area path (e.g. only search) is not a journey — fold it into a bigger one as a stage.
+- A journey has **at most 8 stages**. One agent writes one journey's whole suite, so an
+  oversized journey is serial work no parallelism can help: a 12-stage cut put nine cases on
+  one designer for 27 minutes, while the same corpus cut into three 7-stage journeys ran three
+  designers of ~15 minutes at once. Past the ceiling, split at a point where the user has
+  **achieved a goal** and the later journey inherits no state from the earlier one. If no such
+  point exists — a deploy/use/teardown path is one goal, not three — keep the journey and say
+  why in its `warnings`. Splitting where state carries over would create the cross-journey
+  dependency that rule 8 of `GIGACODE.md` forbids.
 - Journeys are ordered by risk: the path whose failure hurts most is `J01`.
 - Data created in an early stage **must be consumed** in a later stage. If nothing carries over,
   the grouping is wrong — regroup.
@@ -154,8 +162,11 @@ Rules for the index:
 - Every gap and question in a plan appears here, with a stable id, and vice versa. No silent drops:
   this file is what the human is shown before any test case is written.
 - `severity` is `blocking` when a different answer would change a test, `advisory` otherwise.
-- If a journey has fewer than 5 stages, fewer than 3 areas, or no data carried between stages, say so
-  in a `"warnings"` array on that journey instead of quietly shipping it.
+- If a journey has fewer than 5 stages, more than 8, fewer than 3 areas, or no data carried
+  between stages, say so in a `"warnings"` array on that journey instead of quietly shipping it.
+  `warnings` is for structure you could not make right, not a notes field: an explanation of why
+  something unusual is in fact correct belongs in the plan's prose, because everything here is
+  shown to the human as a suspicion to judge.
 
 ## Hard rules
 
