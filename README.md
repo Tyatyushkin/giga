@@ -108,6 +108,7 @@ every question it would have asked in `output/pending.md`; the final phase folds
                         journey-pipeline.md, pytest-generation.md — procedures shared by
                         several commands, inlined with
                         `!{python3 scripts/include_skill.py <name> --level N}`
+conftest.py             registers the J<NN> journey markers from output/tests/ dirs
 GIGACODE.md             project context loaded into every session
 docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
 templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
@@ -117,7 +118,7 @@ output/                 suites/, cases/, reviews/, tests/, state/<journey>.json,
                         .previous/ (last run's artefacts)
 scripts/                validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
                         build_gate_questions.py, gate_check.py, include_skill.py,
-                        start_run.py, sync_markers.py
+                        start_run.py
 examples/               a fully worked journey plan + case, useful as a reference and smoke test
 ```
 
