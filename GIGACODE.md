@@ -31,6 +31,7 @@
 | `input/requirements/_answers.md` | человек (написан оркестратором) | ответы на уточняющие вопросы; приравниваются к требованиям |
 | `output/suites/<JOURNEY_ID>.md` | requirements-analyst | план сьюты / journey |
 | `output/suites/_index.json` | requirements-analyst | машинный индекс: journey, области, пробелы, вопросы, непокрытые REQ |
+| `output/suites/_reqindex.json` | `scripts/extract_reqs.py` | извлечённые требования: id, дословный текст, источник |
 | `output/cases/<JOURNEY_ID>/<CASE_ID>.md` | qa-designer | тест-кейс, Markdown (основной) |
 | `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | qa-designer | тот же кейс, машиночитаемый |
 | `output/reviews/<JOURNEY_ID>-iter<N>.md` | test-critic | ревью + список исправлений |
@@ -39,7 +40,9 @@
 | `output/gate/answers.json` | оркестратор (записывает мои ответы) | ответы шлюза; `scripts/gate_check.py` не пускает в Фазу 2 без него |
 | `output/state.json` | оркестратор | агрегированный снимок по всем journey |
 | `output/tests/<JOURNEY_ID>/` | pytest-stub-writer / browser-test-writer | сгенерированные тесты и отчёт этого journey |
-| `output/report.md` | оркестратор | финальная сводка прогона |
+| `output/pending.md` | оркестратор (дописывает) | вопросы, пропущенные в режиме `--no-ask`; забирается в отчёт Фазой 4 |
+| `output/.run` | `scripts/start_run.py` | идентификатор прогона; по нему `review_scope.py` отличает свою базу хешей от чужой |
+| `output/report.md` | оркестратор | финальная сводка прогона — пишется только в последней фазе |
 
 **Один пишущий на путь.** Параллельные циклы превращают это в правило корректности, а не в
 соглашение: дизайнер пишет только свой `output/cases/<JOURNEY_ID>/`, критик — только свой ревью

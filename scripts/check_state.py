@@ -77,7 +77,7 @@ def check_fields(data: dict, spec: dict, problems: list[str]) -> None:
             )
 
 
-def check_state_file(path: Path) -> list[str]:
+def check_state_file(path: Path, expect_iteration: int | None = None) -> list[str]:
     problems: list[str] = []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -105,6 +105,17 @@ def check_state_file(path: Path) -> list[str]:
             problems.append("blockers = 0, но вердикт FIX_REQUIRED — противоречие")
         if blockers > 0 and verdict == "PASS":
             problems.append(f"blockers = {blockers}, но вердикт PASS — противоречие")
+
+    # The orchestrator owns the iteration counter: it passes N in the prompt and in the
+    # review path, the critic echoes it back. Two counters that are allowed to disagree
+    # are one counter nobody owns, so the disagreement is an error, not a detail.
+    iteration = data.get("iteration")
+    if expect_iteration is not None and isinstance(iteration, int) \
+            and not isinstance(iteration, bool) and iteration != expect_iteration:
+        problems.append(
+            f"iteration = {iteration}, а оркестратор вёл итерацию {expect_iteration} — "
+            f"счётчик разошёлся, вердикту этого файла верить нельзя"
+        )
 
     review = data.get("review")
     if isinstance(review, str) and review:
@@ -158,6 +169,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Проверить JSON, который пишут под-агенты")
     ap.add_argument("--state", help="конкретный файл состояния вместо всех")
     ap.add_argument("--state-dir", default="output/state", help="каталог файлов состояния")
+    ap.add_argument("--expect-iteration", type=int, metavar="N",
+                    help="номер итерации, который оркестратор передал критику "
+                         "(проверяется только вместе с --state)")
     ap.add_argument("--index", default="output/suites/_index.json", help="машинный индекс аналитика")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
@@ -179,7 +193,13 @@ def main() -> int:
 
     failed = 0
     for path, kind in targets:
-        problems = check_state_file(path) if kind == "state" else check_index_file(path)
+        if kind == "state":
+            # --expect-iteration applies to the one file named by --state; sweeping the
+            # whole directory means journeys at different iterations, so it is ignored there.
+            expect = args.expect_iteration if args.state else None
+            problems = check_state_file(path, expect)
+        else:
+            problems = check_index_file(path)
         if problems:
             failed += 1
             sys.stderr.write(f"[state] НЕВАЛИДЕН {path}\n")

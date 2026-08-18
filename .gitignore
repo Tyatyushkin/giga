@@ -8,6 +8,7 @@ output/gate/
 output/tests/
 output/state.json
 output/report.md
+output/pending.md
 output/.run
 output/.previous/
 __pycache__/

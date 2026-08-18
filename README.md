@@ -94,8 +94,9 @@ you rather than absorbed:
 - **After the loops** you get what the run could not settle — requirements no case checks, questions
   still open, journeys needing a human — and can answer and re-run just those journeys.
 
-`--yes` skips only the go/no-go pause. `--no-ask` makes the run fully autonomous and dumps every
-question it would have asked into `output/report.md` under «Требуются решения человека».
+`--yes` skips only the go/no-go pause. `--no-ask` makes the run fully autonomous and accumulates
+every question it would have asked in `output/pending.md`; the final phase folds that file into
+`output/report.md` under «Требуются решения человека».
 
 ## Layout
 
@@ -112,7 +113,8 @@ docs/                   format.md, quality-criteria.md, critic-rubric.md, exampl
 templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
 input/requirements/     your source requirements (sample «Звук» included) + _answers.md
 output/                 suites/, cases/, reviews/, tests/, state/<journey>.json, state.json,
-                        report.md, .run (run identity), .previous/ (last run's artefacts)
+                        report.md, pending.md (skipped questions), .run (run identity),
+                        .previous/ (last run's artefacts)
 scripts/                validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
                         build_gate_questions.py, gate_check.py, include_skill.py,
                         start_run.py, sync_markers.py
