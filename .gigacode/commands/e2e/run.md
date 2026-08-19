@@ -35,6 +35,12 @@ description: Полный цикл — аналитик → N параллель
 
 !{echo "pwd=$(pwd)"; for s in start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill; do [ -f "scripts/$s.py" ] || echo "НЕТ scripts/$s.py"; done; echo "проверено 10 скриптов"}
 
+Все проверки этой процедуры — скрипты, и решение принимается по **коду выхода**, а не по тексту
+вывода. Код, не названный в таблице своей фазы, считается отказом: проверка, которая не
+выполнилась, — не пройденная проверка. «Скрипт не найден» и «не смог определить» останавливают
+фазу ровно так же, как найденное нарушение. Иначе шлюз обходится тем, что ломается, и прогон
+идёт дальше на непроверенных артефактах — то есть ровно там, где шлюз и был нужен.
+
 Состояние проекта сейчас:
 
 !{ls -1 input/requirements/ 2>/dev/null; echo "--- suites ---"; ls -1 output/suites/ 2>/dev/null; echo "--- cases ---"; ls -1 output/cases/ 2>/dev/null; echo "--- state ---"; ls -1 output/state/ 2>/dev/null}
