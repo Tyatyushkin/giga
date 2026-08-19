@@ -109,6 +109,31 @@ MAX_STEPS_PER_STAGE = 2
 MIN_EXPECTED_LEN = 20
 VAGUE_SHORT_CELL = 60
 
+# Populated by main() from --index before check_case() runs; None means "no index found,
+# skip the check" rather than "index is empty" — a missing index must never read as
+# zero valid ids, or every case would falsely BLOCKER on its first run.
+VALID_REQ_IDS: set[str] | None = None
+
+
+def load_req_ids(index_path: Path) -> set[str] | None:
+    """Collect every requirement id a case is allowed to cite, from _index.json.
+
+    A hallucinated or mistyped REQ-id is exactly the failure mode a weaker model produces
+    more often — this catches it for free, without needing the critic to notice by reading.
+    Best-effort: any missing/unreadable/malformed index means "skip this check", not "fail".
+    """
+    if not index_path.is_file():
+        return None
+    try:
+        data = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    ids: set[str] = set()
+    for entry in data.get("reqIndex", []) or []:
+        if isinstance(entry, dict) and entry.get("id"):
+            ids.add(str(entry["id"]))
+    return ids or None
+
 
 class Finding:
     def __init__(self, severity: str, rule: str, file: str, location: str, message: str, fix: str):
@@ -301,6 +326,24 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
         add("MAJOR", "variant-flag", "Общая информация / Вариант от",
             "Кейс-вариант не ссылается на основной кейс",
             "Указать «Вариант от: TC-J<NN>-00»")
+    if is_variant:
+        variant_of = fields.get("Вариант от", "").strip()
+        target = path.with_name(f"{variant_of}.md")
+        if variant_of and not target.exists():
+            add("BLOCKER", "variant-target-missing", "Общая информация / Вариант от",
+                f"«Вариант от: {variant_of}» не ссылается ни на один файл в этом каталоге",
+                f"Проверить ID: должен существовать {target.name}, либо это опечатка/выдуманный ID")
+
+    reqs_field = fields.get("Покрываемые требования", "")
+    if reqs_field and reqs_field not in ("", "…") and not has_placeholder(reqs_field):
+        cited = [r.strip() for r in reqs_field.split(",") if r.strip()]
+        if VALID_REQ_IDS is not None:
+            unknown = [r for r in cited if r not in VALID_REQ_IDS]
+            if unknown:
+                add("BLOCKER", "req-id-unknown", "Общая информация / Покрываемые требования",
+                    f"ID не найден(ы) в индексе требований: {', '.join(unknown)}",
+                    "Сверить с output/suites/_index.json / _reqindex.json — опечатка или "
+                    "несуществующий (выдуманный) якорь требования")
 
     # --- test data -------------------------------------------------------
     data_rows = parse_table(sections.get("Тестовые данные", ""))
@@ -447,7 +490,7 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
     if not json_path.exists():
         add("MAJOR", "json-missing", str(json_path.name),
             "Нет JSON-версии кейса",
-            "Сгенерировать JSON по docs/format.md")
+            "Запустить python3 scripts/build_case_json.py на каталоге кейса")
     else:
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -458,11 +501,11 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
             if data.get("id", "") != case_id:
                 add("BLOCKER", "json-id-mismatch", str(json_path.name),
                     f"ID в JSON ('{data.get('id')}') не совпадает с Markdown ('{case_id}')",
-                    "Синхронизировать JSON с Markdown")
+                    "Перегенерировать: python3 scripts/build_case_json.py на каталоге кейса")
             if len(data.get("steps", [])) != len(step_rows):
                 add("BLOCKER", "json-steps-mismatch", str(json_path.name),
                     f"Шагов в JSON {len(data.get('steps', []))}, в Markdown {len(step_rows)}",
-                    "Синхронизировать JSON с Markdown")
+                    "Перегенерировать: python3 scripts/build_case_json.py на каталоге кейса")
             else:
                 # Same count is necessary, not sufficient: the id/count checks pass while
                 # a step's wording silently diverges, and downstream the JSON is what the
@@ -483,7 +526,8 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                                 f"{json_path.name} / шаг {idx}",
                                 f"{label} в JSON расходится с Markdown: "
                                 f"«{js_val[:60]}» ≠ «{md_val[:60]}»",
-                                "Синхронизировать JSON с Markdown — содержательно идентичны")
+                                "Перегенерировать: python3 scripts/build_case_json.py "
+                                "на каталоге кейса")
                             break  # одного расхождения на шаг достаточно
 
 
@@ -496,13 +540,37 @@ def collect(target: Path) -> list[Path]:
     )
 
 
+def default_index_path(target: Path) -> Path | None:
+    """Find the `_index.json` that actually belongs to this target, not just any file at a
+    fixed cwd-relative path. A case directory outside `output/cases/...` (e.g. the bundled
+    `examples/` fixture, or a second run checked from a different cwd) has no business being
+    cross-checked against whatever `output/suites/_index.json` happens to be lying around from
+    an unrelated run — that produced a false BLOCKER wave on the reference example the first
+    time this shipped. Walk up from the target looking for a `cases` directory and use its
+    sibling `suites/_index.json`; if there is none, there is no sensible default, and the
+    requirement-id check is skipped rather than guessed.
+    """
+    for ancestor in (target.resolve(), *target.resolve().parents):
+        if ancestor.name == "cases":
+            return ancestor.parent / "suites" / "_index.json"
+    return None
+
+
 def main() -> int:
+    global VALID_REQ_IDS
+
     ap = argparse.ArgumentParser(description="Lint e2e test cases")
     ap.add_argument("target", nargs="?", default="output/cases", help="file or directory")
     ap.add_argument("--json", dest="json_out", help="write JSON report to this path")
     ap.add_argument("--quiet", action="store_true", help="only print the summary line")
     ap.add_argument("--plan", help="suite plan for the stage ceiling; found automatically "
                                    "at output/suites/<JOURNEY_ID>.md or <case dir>/_suite-plan.md")
+    ap.add_argument("--index", default=None,
+                     help="reqIndex source for citation checks; default is the sibling "
+                          "suites/_index.json of the target's cases/ directory, if any. "
+                          "Missing/unresolvable file just skips that check.")
+    ap.add_argument("--no-req-check", action="store_true",
+                     help="skip requirement-id citation checking even if --index exists")
     args = ap.parse_args()
 
     target = Path(args.target)
@@ -514,6 +582,11 @@ def main() -> int:
     if not files:
         print(f"validate_cases: no .md cases under {target}", file=sys.stderr)
         return 2
+
+    if not args.no_req_check:
+        index_path = Path(args.index) if args.index is not None else default_index_path(target)
+        if index_path is not None:
+            VALID_REQ_IDS = load_req_ids(index_path)
 
     findings: list[Finding] = []
     unmeasured: set[str] = set()

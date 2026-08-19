@@ -32,8 +32,8 @@
 | `output/suites/<JOURNEY_ID>.md` | requirements-analyst | план сьюты / journey |
 | `output/suites/_index.json` | requirements-analyst | машинный индекс: journey, области, пробелы, вопросы, непокрытые REQ |
 | `output/suites/_reqindex.json` | `scripts/extract_reqs.py` | извлечённые требования: id, дословный текст, источник |
-| `output/cases/<JOURNEY_ID>/<CASE_ID>.md` | qa-designer | тест-кейс, Markdown (основной) |
-| `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | qa-designer | тот же кейс, машиночитаемый |
+| `output/cases/<JOURNEY_ID>/<CASE_ID>.md` | qa-designer | тест-кейс, Markdown (основной, единственный рукописный) |
+| `output/cases/<JOURNEY_ID>/<CASE_ID>.json` | `scripts/build_case_json.py` (запускает qa-designer) | тот же кейс, собран из `.md`, не пишется вручную |
 | `output/reviews/<JOURNEY_ID>-iter<N>.md` | test-critic | ревью + список исправлений |
 | `output/state/<JOURNEY_ID>.json` | test-critic | состояние цикла этого journey — один пишущий на файл |
 | `output/gate/questions.json` | `scripts/build_gate_questions.py` | payload вопросов шлюза требований — оркестратор передаёт его в инструмент вопроса дословно |
@@ -87,13 +87,9 @@
 
 ## Управление циклом
 
-- `MAX_ITERATIONS = 3` (переопределить через `--max N` у команды `/e2e:run`).
-- Каждый journey итерируется независимо. Journey выходит из цикла, когда его критик сообщает о
-  **нуле BLOCKER**. MAJOR/MINOR находки записываются в ревью и в финальный отчёт, но не блокируют.
-- Если блокеры остаются после `MAX_ITERATIONS`, этот journey останавливается и помечается
-  `NEEDS_HUMAN` в `output/report.md` с неразрешённым списком. Остальные journey продолжают.
-- Journey, чей под-агент ошибся или не записал состояние, помечается `FAILED` — записывается,
-  не фатально для прогона.
+`MAX_ITERATIONS = 3` (`--max N`). Journey выходит по нулю BLOCKER (`PASS`), по исчерпанию итераций
+с блокерами (`NEEDS_HUMAN`), или по сбою под-агента (`FAILED`) — ни то, ни другое не останавливает
+остальные journey. Полная процедура — оркестраторская, не агентская: `run.md`, Фаза 2.
 
 ## Параллельность
 
@@ -112,14 +108,9 @@
 
 ## Детерминированный шлюз
 
-Перед любым семантическим ревью критик должен запустить:
-
-```bash
-python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
-```
-
-Линтер проверяет: структуру, плейсхолдеры, нумерацию шагов, размытые формулировки и атомарность
-шагов. Его находки сливаются в отчёт ревью. Код выхода линтера 1 = блокеры присутствуют.
+Критик обязан прогнать `scripts/validate_cases.py` перед семантическим ревью — точная команда и
+правило «никогда не спорить с линтером по структурным фактам» в его собственной спецификации,
+`.gigacode/agents/test-critic.md`, «1. Deterministic gate»; не дублируется здесь.
 
 ## Справочные документы
 
@@ -148,3 +139,11 @@ journey с нулём BLOCKER. `NEEDS_HUMAN` journey писателю не от�
 
 Как писатель пишет код — фикстуры, Allure-разметка, структура его отчёта — в спеках
 `.gigacode/agents/pytest-stub-writer.md` и `.gigacode/agents/browser-test-writer.md`.
+
+Здесь этот контракт намеренно не повторяется. `GIGACODE.md` загружается в сессию каждого
+агента цикла независимо от того, нужен ли ему pytest: когда 92 из 216 строк файла были
+копией того, что живёт в спеках писателей, треть агентов платила за текст, который им
+не адресован.
+
+Одно правило отсюда всё же стоит помнить при чтении отчётов: числа в них берутся только
+из фактического вывода `pytest` — никогда по памяти и никогда по шаблону.
