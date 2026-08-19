@@ -98,6 +98,14 @@ MULTI_ACTION = [
 ]
 
 MIN_MAIN_STEPS = 8
+
+# Ceiling on how far one stage may be unrolled into steps. Measured density on every
+# main case on disk: 1.25 and 1.38 and 1.75 (Knox, three runs on one corpus) and 1.58
+# (the Звук reference in examples/). Two is above all four with margin, so the rule
+# guards against runaway expansion instead of enforcing a house style — the floor had
+# no counterpart until three runs turned 8 stages into 10, 11 and 14 steps.
+MAX_STEPS_PER_STAGE = 2
+
 MIN_EXPECTED_LEN = 20
 VAGUE_SHORT_CELL = 60
 
@@ -211,7 +219,36 @@ def section_is_empty(body: str) -> bool:
     return stripped == ""
 
 
-def check_case(path: Path, findings: list[Finding]) -> None:
+def plan_for(case_path: Path, override: str | None) -> Path | None:
+    """The suite plan that owns this case, or None when it cannot be located.
+
+    Two layouts are recognised: a run tree (output/cases/<JID>/ beside
+    output/suites/<JID>.md) and the self-contained example directory, which keeps
+    its plan next to the cases as _suite-plan.md.
+    """
+    if override:
+        p = Path(override)
+        return p if p.is_file() else None
+    jid = case_path.parent.name
+    candidates = [
+        case_path.parent.parent.parent / "suites" / f"{jid}.md",
+        Path("output/suites") / f"{jid}.md",
+        case_path.parent / "_suite-plan.md",
+    ]
+    return next((c for c in candidates if c.is_file()), None)
+
+
+def stage_count(plan: Path) -> int | None:
+    """Rows of the plan's «Этапы» table — the same table validate_plans.py reads."""
+    m = re.search(r"^##\s+Этапы\s*$(.*?)(?=^##\s|\Z)", plan.read_text(encoding="utf-8"),
+                  re.M | re.S)
+    if not m:
+        return None
+    rows = sum(1 for line in m.group(1).splitlines() if re.match(r"^\|\s*\d+\s*\|", line))
+    return rows or None
+
+
+def check_case(path: Path, findings: list[Finding], stages: int | None = None) -> None:
     name = str(path)
     text = path.read_text(encoding="utf-8")
     sections = split_sections(text)
@@ -303,6 +340,15 @@ def check_case(path: Path, findings: list[Finding]) -> None:
         add("BLOCKER", "steps-too-few", "Шаги",
             f"В основном кейсе {len(step_rows)} шагов, минимум {MIN_MAIN_STEPS} — это не сквозной сценарий",
             "Развернуть путь до полного journey по suite-плану")
+
+    if not is_variant and stages:
+        ceiling = MAX_STEPS_PER_STAGE * stages
+        if len(step_rows) > ceiling:
+            add("MAJOR", "steps-too-many", "Шаги",
+                f"В основном кейсе {len(step_rows)} шагов на {stages} этапов плана "
+                f"({len(step_rows) / stages:.2f} на этап), потолок {ceiling}",
+                "Свести шаги, дробящие одно наблюдаемое, обратно в один шаг — "
+                "или обосновать этапами: потолок считается от плана")
 
     steps_text = " ".join(" ".join(r) for r in step_rows).lower()
     # Markdown markers stripped for substring matching below: a value written as
@@ -455,6 +501,8 @@ def main() -> int:
     ap.add_argument("target", nargs="?", default="output/cases", help="file or directory")
     ap.add_argument("--json", dest="json_out", help="write JSON report to this path")
     ap.add_argument("--quiet", action="store_true", help="only print the summary line")
+    ap.add_argument("--plan", help="suite plan for the stage ceiling; found automatically "
+                                   "at output/suites/<JOURNEY_ID>.md or <case dir>/_suite-plan.md")
     args = ap.parse_args()
 
     target = Path(args.target)
@@ -468,8 +516,13 @@ def main() -> int:
         return 2
 
     findings: list[Finding] = []
+    unmeasured: set[str] = set()
     for f in files:
-        check_case(f, findings)
+        plan = plan_for(f, args.plan)
+        stages = stage_count(plan) if plan else None
+        if stages is None:
+            unmeasured.add(f.parent.name)
+        check_case(f, findings, stages)
 
     counts = {"BLOCKER": 0, "MAJOR": 0, "MINOR": 0}
     for f in findings:
@@ -485,6 +538,9 @@ def main() -> int:
         f"checked {len(files)} case file(s): "
         f"BLOCKER {counts['BLOCKER']}, MAJOR {counts['MAJOR']}, MINOR {counts['MINOR']}"
     )
+    if unmeasured:
+        # Naming what went unchecked: a rule silently skipped reads as a rule that passed.
+        print(f"  потолок шагов не проверен — план не найден: {', '.join(sorted(unmeasured))}")
 
     if args.json_out:
         out = Path(args.json_out)
