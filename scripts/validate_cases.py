@@ -88,6 +88,13 @@ PLACEHOLDERS = [
 # a whole design+review iteration.
 PLACEHOLDER_SLOT = re.compile(r"<[^<>\s][^<>]{0,58}>")
 
+# Разметка отличается от незаполненного слота наличием закрывающего элемента:
+# `</provider>` или `/>`. Плейсхолдер `<хост>` его не имеет по определению.
+# Без этого XML нельзя было положить значением в тестовые данные — REQ-02 требует
+# XML-описание топологии, а линтер объявлял каждый его тег заглушкой, и дизайнеру
+# приходилось ссылаться на имя файла вместо самого значения.
+MARKUP_HINT = re.compile(r"</[^<>\s]|/>")
+
 # Markers of more than one action inside a single step.
 MULTI_ACTION = [
     " и затем ",
@@ -218,6 +225,10 @@ def has_placeholder(value: str) -> str | None:
         # designer worked around the linter with code spans instead of writing cases.
         if re.search(rf"(?<![a-zа-я0-9]){re.escape(p)}(?![a-zа-я0-9])", low):
             return p
+    if MARKUP_HINT.search(value):
+        # Значение — разметка. Слот внутри неё не ищем: цена — пропущенный
+        # плейсхолдер внутри XML, что редко; выигрыш — XML вообще можно написать.
+        return None
     slot = PLACEHOLDER_SLOT.search(value)
     if slot:
         return slot.group(0)
