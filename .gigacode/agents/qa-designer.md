@@ -82,6 +82,11 @@ branch point, and states its own deviation from that point on. It never re-descr
 - **No invented behaviour.** If you need a system reaction the requirements do not define, do not
   guess it. Either the step checks only what is defined, or the check moves to the gaps and a
   question is raised. Inventing is the most common blocker — assume the critic will catch it.
+  **A status code is a system reaction.** A requirement that fixes only the response body has not
+  fixed the code: writing «HTTP 200» there is invented behaviour, however obvious the code seems.
+  Assert the body, raise the gap, and say it in the step — «HTTP-код этой операции требованиями
+  не задан (пробел N, вопрос M) и на шаге не проверяется». See `docs/critic-rubric.md`, «Код
+  ответа — это реакция системы».
 - **No vague results.** If you cannot name an observable, the step is not testable yet: raise a gap.
 - Headings, field names and column names exactly as in `docs/format.md`. Russian.
 - Markdown and JSON must match content for content.
