@@ -27,6 +27,43 @@ REQUIRED_FIELDS = [
 ]
 
 
+def _traceability(data) -> str:
+    """Таблица «требование → шаги», порождённая из steps[].requirements.
+
+    Поле живёт только в JSON — колонки с якорем в таблице шагов нет. Линтер и критик
+    его читают, а человек на шлюзе читает Markdown, и до этой секции пошаговая
+    трассируемость была ему не видна: он принимал решение о покрытии, не видя,
+    чем оно подтверждено.
+
+    Требование, объявленное кейсом и не привязанное ни к одному шагу, показывается
+    с прочерком — это ровно то, что линтер отмечает как `req-not-exercised`, и
+    человеку оно нужно не меньше.
+    """
+    steps = data.get("steps", []) or []
+    by_req: dict[str, list[str]] = {}
+    for st in steps:
+        if not isinstance(st, dict):
+            continue
+        num = str(st.get("number", st.get("step", "")))
+        for r in st.get("requirements", []) or []:
+            if isinstance(r, str) and r.strip():
+                by_req.setdefault(r.strip(), []).append(num)
+
+    declared = [r for r in (data.get("requirements") or []) if isinstance(r, str)]
+    if not by_req and not declared:
+        return ""
+
+    def key(req: str):
+        head, _, tail = req.rpartition("-")
+        return (head, int(tail)) if tail.isdigit() else (req, 0)
+
+    lines = ["## Трассируемость\n",
+             "| Требование | Проверяется шагами |", "|---|---|"]
+    for req in sorted(set(declared) | set(by_req), key=key):
+        lines.append(f"| {_cell(req)} | {', '.join(by_req.get(req, [])) or '—'} |")
+    return "\n".join(lines) + "\n"
+
+
 def _cell(value) -> str:
     """Строку — в ячейку таблицы, не ломая таблицу.
 
@@ -151,6 +188,11 @@ def json_to_md(data):
     # ── Шаги ──
     lines.append("## Шаги\n")
     lines.append(_steps_table(data.get("steps", [])))
+
+    # ── Трассируемость ──
+    trace = _traceability(data)
+    if trace:
+        lines.append(trace)
 
     # ── Постусловия ──
     lines.append("## Постусловия\n")
