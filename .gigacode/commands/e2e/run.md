@@ -30,10 +30,10 @@ description: Полный цикл — аналитик → N параллель
 
 !{python3 scripts/include_skill.py human-gate --level 3}
 
-Инструменты и рабочий каталог — если ниже названа хоть одна недостающая строка или `pwd`
-не корень репозитория, остановитесь и скажите мне об этом: дальше шлюзы просто не сработают.
+Инструменты — если ниже названа хоть одна недостающая строка, остановитесь и скажите мне об этом:
+дальше шлюзы просто не сработают.
 
-!{echo "pwd=$(pwd)"; for s in start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill; do [ -f "scripts/$s.py" ] || echo "НЕТ scripts/$s.py"; done; echo "проверено 10 скриптов"}
+!{for s in start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill; do [ -f "scripts/$s.py" ] || echo "НЕТ scripts/$s.py"; done; echo "проверено 10 скриптов"}
 
 Все проверки этой процедуры — скрипты, и решение принимается по **коду выхода**, а не по тексту
 вывода. Код, не названный в таблице своей фазы, считается отказом: проверка, которая не
