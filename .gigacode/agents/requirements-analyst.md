@@ -37,12 +37,18 @@ trip re-processes the whole growing context before you have thought about anythi
 **Do not type the requirement index by hand.** Run:
 
 ```bash
-python3 scripts/extract_reqs.py [--prefix BR,REQ]
+python3 scripts/extract_reqs.py [--prefix BR,REQ] [--answers input/requirements/_answers.md]
 ```
 
 It writes `output/suites/_reqindex.json` — one record per numbered statement: `id`, verbatim
 `text`, `source` (`<file>.md § раздел`). Numbering was never your decision: the rule has always
 been «reuse the source numbers exactly», which makes this extraction, not judgement.
+
+Pass `--answers` whenever the answers file exists. Human answers from the requirements gate bind
+exactly as requirements do, but they land in a separate `answers` list under their own `ANS-NN`
+ids — never as new `REQ-NN`. An invented requirement id would sit in coverage accounting forever
+as uncovered, because no source file carries it. Quote an answer by its `qId` where it settles
+a stage's expected result.
 
 Two things still need your eyes:
 
