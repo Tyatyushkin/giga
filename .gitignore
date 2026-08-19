@@ -5,5 +5,8 @@ output/state/
 output/gate/
 output/state.json
 output/report.md
+allure-results/
+pytest.log
+\\
 __pycache__/
 *.pyc

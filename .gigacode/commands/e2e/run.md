@@ -1,5 +1,5 @@
 ---
-description: Полный цикл — аналитик → N параллельных циклов дизайнер/критик, повтор до нуля блокеров (макс. 3 итерации). Опционально — генерация pytest-тестов по завершении.
+description: Полный цикл — аналитик → N параллельных циклов дизайнер/критик, повтор до нуля блокеров (макс. 3 итерации). Опционально — генерация pytest-тестов и публикация в Allure TestOps.
 ---
 
 Вы — оркестратор многопроходной генерации e2e тест-кейсов. Следуйте этой процедуре **точно** и
@@ -15,6 +15,9 @@ description: Полный цикл — аналитик → N параллель
 - `--no-ask` → полностью автономно: пропустить все интерактивные вопросы и записать ответы,
   которые могли бы быть даны, в `output/report.md` под заголовком «Требуются решения человека»
 - `--generate-pytest` → флаг включения генерации pytest-тестов после завершения циклов
+- `--publish-allure` → флаг публикации созданных тестов в Allure TestOps через MCP (см. Фазу 2.6)
+- `--allure-project-id N` → ID проекта Allure TestOps (если не указан — оркестратор спросит)
+- `--allure-project-name NAME` → имя проекта Allure TestOps (альтернатива ID)
 
 ## Как задавать мне вопросы
 
@@ -182,12 +185,23 @@ NEEDS_HUMAN. Два цикла не должны никогда писать о�
 Постройте список работ из journey (или одного, указанного в `--journey`), упорядоченный по
 риску — `J01` первым. Возьмите первые `P` единиц как **активный батч**; остальные ждут в очереди.
 
+**Перед первой волной дизайнеров** (S1) выполните один раз:
+
+```
+python3 scripts/extract_journey_context.py --all
+```
+
+Скрипт читает `output/suites/_index.json` и пишет `output/suites/<J>-context.json` —
+минимальный payload с REQ/gaps/questions только этого journey. Дизайнер и критик
+получают в промпте **только** свой context-файл, не `_index.json` целиком — это
+экономит до 40% входных токенов. На повторных итерациях запускать скрипт не нужно,
+если `_index.json` не изменился.
+
 Затем выполните lockstep-волны:
 
 ```
 wave:
-  1. отправьте один вызов agent(qa-designer) на каждый АКТИВНЫЙ journey — все в ОДНОМ СООБЩЕНИИ,
-     чтобы они выполнялись параллельно. Никогда не отправляйте их по одному.
+  1. отправьте один вызов agent(qa-designer) на каждый АКТИВНЫЙ journey. 
   2. когда все вызовы вернулись, отправьте один вызов agent(test-critic) на каждый
      АКТИВНЫЙ journey — снова все в одном сообщении.
   3. прочитайте output/state/<J>.json для каждого активного journey и решите:
@@ -203,6 +217,7 @@ wave:
 
 - Передавайте явные пути к файлам в каждом промпте под-агента. Под-агенты не имеют доступа ни к
   вашему контексту, ни к контексту друг друга — каждый должен получить свой файл сьюты,
+  свой context-файл (`output/suites/<J>-context.json` — **не** `_index.json`),
   свои файлы требований, директорию кейсов, путь ревью и путь состояния.
   Промпт, содержащий «the journey» вместо пути — это ошибка.
 - Каждый промпт должен указывать границу цикла: «вы владеете только `<J>`; не читайте и не
@@ -216,6 +231,56 @@ wave:
   `J01 iter2: BLOCKER 1, MAJOR 3, MINOR 2 → FIX` / `→ PASS` / `→ NEEDS_HUMAN`.
 - Агрегируйте `output/state/*.json` в `output/state.json` после каждой волны:
   `{ "maxIterations": N, "parallel": P, "unit": "journey|area", "journeys": { "J01": {…} }, "verdict": "…" }`.
+
+**W2: после каждой волны дизайнеров** запускайте постпроцессор для каждого активного journey,
+чтобы регенерировать JSON-файлы из MD:
+
+```
+python3 scripts/md_to_case_json.py output/cases/<JOURNEY_DIR>
+```
+
+Это устраняет необходимость писать JSON самим дизайнерам (экономия ~25% выходных токенов).
+
+**W5: критик использует** `scripts/cached_validate.py` вместо `validate_cases.py` напрямую —
+кэш переиспользует JSON-отчёт линтера между итерациями, экономя 1 turn критика.
+
+**Шаблон промпта дизайнера** (каждая волна):
+
+```
+You own journey <JOURNEY_ID>. Read these in order:
+
+1. output/suites/<JOURNEY_ID>.md — the journey plan.
+2. output/suites/<JOURNEY_ID>-context.json — minimal context (REQ/gaps/questions for THIS journey).
+3. input/requirements/*.md and input/requirements/_answers.md if it exists.
+4. docs/format.md and templates/test-case.md.
+5. output/reviews/<JOURNEY_ID>-iter<N>.md on fix iterations only.
+
+Write ONLY Markdown cases into output/cases/<JOURNEY_DIR>/
+(orchestrator regenerates *.json via scripts/md_to_case_json.py — do NOT write JSON).
+
+At the end run:
+   python3 scripts/validate_cases.py output/cases/<JOURNEY_DIR>
+
+to confirm no BLOCKER. Return: files written, step counts, gaps, questions, lint status.
+```
+
+**Шаблон промпта критика** (каждая волна):
+
+```
+You review journey <JOURNEY_ID>. Read these:
+
+1. output/suites/<JOURNEY_ID>.md — scope contract.
+2. output/suites/<JOURNEY_ID>-context.json — minimal context (your REQ only).
+3. output/cases/<JOURNEY_DIR>/*.md — the artefacts.
+4. output/reviews/<JOURNEY_ID>-iter<N-1>.md — the previous review if iteration > 1.
+5. docs/critic-rubric.md, docs/quality-criteria.md, docs/format.md.
+
+Run:
+   python3 scripts/cached_validate.py output/cases/<JOURNEY_DIR> --json output/reviews/<JOURNEY_ID>-lint.json
+
+Write output/reviews/<JOURNEY_ID>-iter<N>.md and output/state/<JOURNEY_ID>.json.
+Do not write output/state.json — the orchestrator owns it.
+```
 
 ### Фаза 2.5 — Генерация pytest-тестов (опционально, спрашивает человек)
 
@@ -239,8 +304,9 @@ NEEDS_HUMAN оркестратор обрабатывает вручную (те
 `pytest-test-writer` читает:
 
 - План journey → `output/suites/<J>.md`
-- Все файлы кейсов → `output/cases/<J>/TC-*.md`
-- Все JSON кейсов → `output/cases/<J>/TC-*.json` (если есть)
+- Все файлы кейсов → `output/cases/<J>/TC-*.md` (JSON уже сгенерирован W2 — постпроцессором)
+- Все JSON кейсов → `output/cases/<J>/TC-*.json`
+- Lint-отчёт критика → `output/reviews/<J>-iter<N>-lint.json` (для skip-маркировки)
 
 И пишет:
 
@@ -249,6 +315,17 @@ NEEDS_HUMAN оркестратор обрабатывает вручную (те
 - `tests/helpers/conftest.py` — глобальные фикстуры (fixture api_client, project_root)
 - `pytest.ini` — маркеры из ревью
 - `tests/test_JOURNEY_ID.py` — один класс на Case, один `test_` на шаг
+
+**W4 — pytest запускает оркестратор**, не writer. После того как **все** writer-ы
+вернули summary со списком созданных файлов и количеством `test_` функций, выполните:
+
+```
+python3 -m pytest output/tests/<JOURNEY_DIR> -v --tb=short 2>&1
+```
+
+для каждого PASS-journey. Соберите статистику (total/PASS/SKIP/FAIL) и передайте её
+обратно writer-у, чтобы тот записал `output/tests/<JOURNEY_DIR>/README.md`. Это
+экономит 5–15 turns у каждого writer-а (они больше не запускают pytest сами).
 
 **Контракт** (все пути в `tests/`):
 
@@ -269,12 +346,115 @@ NEEDS_HUMAN оркестратор обрабатывает вручную (те
 5. **API-стаб детерминирован.** Возвращает одно и то же на один и тот же вход — никаких flaky-тестов.
 6. **Параллельный запуск.** Если journey несколько с PASS-вердиктом, агенты запускаются в одном
    сообщении — все параллельно. Оркестратор дожидается завершения всех.
+7. **W4: writer не запускает pytest.** Только пишет файлы. Оркестратор делает прогон
+   после всех writer-ов и отдаёт статистику для `README.md`.
 
 **Выход:** После завершения всех писателей оркестратор сообщает:
 
 > «Сгенерировано N тестов, M пропущено. Нужна доработка от человека по K BLOCKER.»
 
-Если `--generate-pytest` не передан и пользователь отвечает «нет» — переходите к Фазе 3.
+### Фаза 2.6 — Публикация в Allure TestOps (при наличии MCP)
+
+**Условие:** если `--publish-allure` передан и MCP Allure TestOps доступен (инструмент
+`mcp__allure-testops__create_test_case` отвечает), иначе — **пропустить**, вывести
+предупреждение в сводку.
+
+**Аргументы:**
+- `--publish-allure` — флаг включения публикации в Allure TestOps. Без него — пропуск.
+- `--allure-project-id N` или `ALLURE_PROJECT_ID` из окружения — ID проекта в TestOps.
+  Если не указан ни один — оркестратор **спрашивает** пользователя через инструмент вопроса
+  (`header`: `AllurePID`, `question`: «ID проекта Allure TestOps для публикации?»,
+  варианты: по одному на каждый проект из `mcp__allure-testops__list_test_cases` или
+  `mcp__allure-testops__list_project_custom_fields`).
+- `--allure-project-name` — имя проекта (альтернатива ID). Если передан, оркестратор
+  **ищет** через `projectName` в `mcp__allure-testops__list_test_cases`.
+
+**Статус:** Фаза 2.6 выполняется **только** после того, как все pytest-тесты написаны
+и запущены (см. выше). Не выполняйте её, пока хоть один `test_JOURNEY_ID.py` не дописан.
+
+**Процедура публикации (по одному journey):**
+
+Оркестратор читает:
+- `output/tests/<JOURNEY_ID>/README.md` — отчёт о прогоне тестов
+- `output/cases/<JOURNEY_ID>/TC-*.md` — кейсы (для метаданных)
+- `output/suites/<JOURNEY_ID>.md` — план сьюты
+
+Для каждого шага каждого кейса создаётся один тест-кейс в Allure TestOps:
+
+1. **Прочитать all кейсы** — `mcp__allure-testops__list_test_cases` с `projectId`/`projectName`
+   или `mcp__allure-testops__search_test_cases` с `rql`: `name ~ "<JOURNEY_ID>"` — проверить,
+   не дублируются ли.
+
+2. **Создать, если нет** — `mcp__allure-testops__create_test_case` с payload:
+
+```json
+{
+  "projectId": <ALLURE_PROJECT_ID>,
+  "name": "<JOURNEY_ID>-TC-<CASE_ID>-<NN> — <действие пользователя>",
+  "description": "Шаг <NN> из <CASE_ID>: <ожидаемый результат>. REQ-<XX>",
+  "labels": [
+    {"name": "layer", "value": "e2e"|"smoke"|"blocker"},
+    {"name": "req", "value": "REQ-XX,REQ-YY"}
+  ],
+  "customFields": [
+    {"name": "Feature", "value": "<JOURNEY_ID>"},
+    {"name": "Suite", "value": "TC-<CASE_ID>"}
+  ]
+}
+```
+
+**Поля:**
+
+| Поле | Откуда | Пример |
+|---|---|---|
+| `name` | `<JOURNEY_ID>-TC-<CASE_ID>-<NN> — заголовок шага` | `J01-TC-J01-00-05 — Выбор трёх жанров` |
+| `description` | `output/cases/<J>/TC-*.md`, шаг `## Ожидаемый результат` | `Шаг 5 из TC-J01-00: пользователь выбирает 3 жанра, счётчик = 3. REQ-02` |
+| `labels[].layer` | статус теста: `e2e` = main path, `smoke` = variant, `blocker` = BLOCKER | |
+| `labels[].req` | `REQ-XX` из трассировки шага | |
+| `customFields[Feature]` | `JOURNEY_ID` | |
+| `customFields[Suite]` | `CASE_ID` | |
+
+3. **Теги** — `mcp__allure-testops__add_test_case_tags_bulk` с тегами из `output/reviews/*`:
+   `BLOCKER`, `MAJOR`, `MINOR`, `PASS`.
+
+4. **Связать с требованиями** — `mcp__allure-testops__set_test_case_custom_fields`, если
+   в TestOps есть кастомное поле «REQ» — установить `value` = `REQ-XX`.
+
+**Если MCP недоступен** (инструмент `mcp__allure-testops__create_test_case` не отвечает):
+
+- Пропустить всю Фазу 2.6.
+- Записать в `output/report.md` строку:
+  > **Allure TestOps:** не подключён (MCP-инструменты отсутствуют). Публикация пропущена.
+- Не прерывать прогон, не менять вердикт ни одного journey.
+
+**Если MCP доступен, но `ALLURE_PROJECT_ID` не задан и не найден:**
+
+- Оркестратор **спрашивает** пользователя (см. «Как задавать мне вопросы») — один вызов,
+  последнее действие перед созданием кейсов:
+
+  - `header`: `AllurePID`
+  - `question`: «Allure TestOps MCP подключён, но не указан projectId. Какой проект использовать?»
+  - варианты: список проектов (1 проект = 1 вариант), полученных через
+    `mcp__allure-testops__list_test_cases` или `mcp__allure-testops__list_project_custom_fields`
+    с пустым `projectId` (возвращает все доступные проекты).
+
+**Выход Фазы 2.6:**
+
+Оркестратор выводит:
+
+> «Опубликовано <N> тест-кейсов в Allure TestOps (проект <NAME>). <M> пропущено из-за BLOCKER.»
+
+**Таблица в `output/report.md`:**
+
+После публикации добавить строку в таблицу Фазы 4:
+
+| Journey | Вердикт | Итерации | Блокеры | Кейсы | Шаги | **Allure TestOps** |
+|---|---|---|---|---|---|---|
+| J01 | PASS | 2 | 0 | 5 | 10 | ✅ опубликовано |
+
+Столбец `Allure TestOps` — `✅ опубликовано` / `⛔ не подключён` / `⚠️ пропущен (BLOCKER)`.
+
+Если `--publish-allure` не передан и пользователь отвечает «нет» — переходите к Фазе 3.
 
 ### Фаза 3 — Шлюз покрытия (обязательный, спросить явно)
 

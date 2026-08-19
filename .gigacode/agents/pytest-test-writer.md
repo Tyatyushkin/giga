@@ -1,6 +1,17 @@
 ---
 name: pytest-test-writer
 description: Use this agent when you need to write Python pytest tests based on markdown documentation or specification files (e.g., .md files, technical specs, feature descriptions, or design documents). This agent excels at translating written requirements and specifications into comprehensive, well-structured test suites.
+tools:
+  - read_file
+  - read_many_files
+  - glob
+  - grep
+  - write_file
+  - run_shell_command
+modelConfig:
+  temperature: 0.2
+runConfig:
+  max_turns: 50
 color: Red
 ---
 
@@ -175,19 +186,16 @@ allure serve allure-results
 ```
 ```
 
-**Порядок действий:**
+**Порядок действий (W4 — pytest запускает оркестратор):**
 
 1. Написать все файлы тестов (`test_JOURNEY_ID.py`, `test_data.py`, `api_stub.py`, `conftest.py`).
 2. Убедиться, что `allure` импортирован в `test_JOURNEY_ID.py`.
-3. Запустить тесты:
-
-   ```bash
-   python3 -m pytest output/tests/<JOURNEY_ID>/ -v --tb=short 2>&1
-   ```
-
-4. Прочитать вывод pytest и **собрать статистику** (общее число, PASS, SKIP, FAIL).
-5. Для каждого skip-теста прочитать его `reason` и сопоставить с уточняющим вопросом из suite-plan или кейса.
-6. Записать `output/tests/<JOURNEY_ID>/README.md` с заполненными цифрами.
+3. Вернуть **summary** со списком созданных файлов и количеством `test_` функций по каждому
+   кейсу. **Не запускать pytest сам** — оркестратор после завершения всех writer-ов
+   запустит `python3 -m pytest output/tests/<JOURNEY_ID>/ -v --tb=short` и прочитает
+   результат.
+4. Дождаться результата прогона от оркестратора (статистика PASS/SKIP/FAIL).
+5. Записать `output/tests/<JOURNEY_ID>/README.md` с заполненными цифрами.
 
 Пример заполненного отчёта:
 
