@@ -27,6 +27,19 @@ REQUIRED_FIELDS = [
 ]
 
 
+def _cell(value) -> str:
+    """Строку — в ячейку таблицы, не ломая таблицу.
+
+    Конвертер подставлял значения как есть, поэтому `|` или перевод строки внутри
+    любого поля шага разъезжали таблицу, а линтер после этого сообщал о дефектах,
+    которых в кейсе нет. Запрет в docs/format.md § 5 работал только пока о нём помнят;
+    экранирование делает его ненужным.
+    """
+    s = "" if value is None else str(value)
+    s = s.replace("\\", "\\\\").replace("|", "\\|")
+    return " ".join(s.split())
+
+
 def _field(value, fallback="—"):
     """Форматирует значение поля: None/пустой → '—'."""
     if value is None:
@@ -52,7 +65,7 @@ def _steps_table(steps):
         action = s.get("action", "")
         td = s.get("testData", "") or s.get("test_data", "") or ""
         er = s.get("expectedResult", "") or s.get("expected_result", "") or ""
-        lines.append(f"| {n} | {action} | {td} | {er} |")
+        lines.append(f"| {_cell(n)} | {_cell(action)} | {_cell(td)} | {_cell(er)} |")
     return "\n".join(lines) + "\n"
 
 
@@ -82,7 +95,7 @@ def _test_data_table(data):
         name = row.get("name", row.get("param", ""))
         value = row.get("value", "")
         comment = row.get("comment", "")
-        lines.append(f"| {name} | {value} | {comment} |")
+        lines.append(f"| {_cell(name)} | {_cell(value)} | {_cell(comment)} |")
     return "\n".join(lines) + "\n"
 
 

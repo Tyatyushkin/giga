@@ -187,7 +187,11 @@ def parse_table(block: str) -> list[list[str]]:
             if rows:
                 break
             continue
-        cells = [c.strip() for c in line.strip("|").split("|")]
+        # `\|` — экранированная труба внутри ячейки, а не её граница: конвертер
+        # экранирует значения, чтобы `|` в тексте шага не разъезжал таблицу.
+        # Резать по ней — значит сообщать «5 колонок вместо 4» о корректной строке.
+        cells = [c.strip().replace("\\|", "|").replace("\\\\", "\\")
+                 for c in re.split(r"(?<!\\)\|", line.strip("|"))]
         if re.fullmatch(r"[-: ]+", "".join(cells).replace("|", "")) and set("".join(cells)) <= set("-: "):
             seen_header = True
             continue
