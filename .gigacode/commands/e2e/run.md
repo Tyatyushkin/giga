@@ -30,6 +30,11 @@ description: Полный цикл — аналитик → N параллель
 
 !{python3 scripts/include_skill.py human-gate --level 3}
 
+Инструменты и рабочий каталог — если ниже названа хоть одна недостающая строка или `pwd`
+не корень репозитория, остановитесь и скажите мне об этом: дальше шлюзы просто не сработают.
+
+!{echo "pwd=$(pwd)"; for s in start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill; do [ -f "scripts/$s.py" ] || echo "НЕТ scripts/$s.py"; done; echo "проверено 10 скриптов"}
+
 Состояние проекта сейчас:
 
 !{ls -1 input/requirements/ 2>/dev/null; echo "--- suites ---"; ls -1 output/suites/ 2>/dev/null; echo "--- cases ---"; ls -1 output/cases/ 2>/dev/null; echo "--- state ---"; ls -1 output/state/ 2>/dev/null}
