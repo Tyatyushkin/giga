@@ -18,6 +18,7 @@ JSON-кейс обязан содержать поля из схемы docs/form
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,29 @@ REQUIRED_FIELDS = [
     "id", "title", "goal", "priority", "journeyId",
     "steps", "preconditions", "postconditions",
 ]
+
+
+TESTDATA_REF = re.compile(r"(?<!\{)\{([^{}]+)\}(?!\})")
+
+
+def resolve_refs(value: str, table) -> str:
+    """Подставляет `{Имя параметра}` значениями из таблицы «Тестовые данные».
+
+    Ячейка шага — не список значений, а композиция: полный URL складывается из
+    базового адреса и пути. Поэтому ссылка подставляется на место, а не заменяет
+    ячейку целиком. `{{` и `}}` — литеральные скобки.
+
+    Неизвестное имя остаётся в тексте как есть: артефакт должен показывать
+    неразрешённую ссылку, а не прятать её. Ловит это линтер.
+    """
+    if not isinstance(value, str) or "{" not in value:
+        return value
+    by_name = {}
+    for row in table or []:
+        if isinstance(row, dict) and isinstance(row.get("name"), str):
+            by_name[row["name"].strip()] = str(row.get("value", ""))
+    out = TESTDATA_REF.sub(lambda m: by_name.get(m.group(1).strip(), m.group(0)), value)
+    return out.replace("{{", "{").replace("}}", "}")
 
 
 def _traceability(data) -> str:
@@ -89,7 +113,7 @@ def _field(value, fallback="—"):
     return str(value).strip() or fallback
 
 
-def _steps_table(steps):
+def _steps_table(steps, table=None):
     """Генерирует markdown-таблицу шагов."""
     if not steps:
         return "Шаги не определены.\n"
@@ -100,7 +124,7 @@ def _steps_table(steps):
     for s in steps:
         n = s.get("number", s.get("step", ""))
         action = s.get("action", "")
-        td = s.get("testData", "") or s.get("test_data", "") or ""
+        td = resolve_refs(s.get("testData", "") or s.get("test_data", "") or "", table)
         er = s.get("expectedResult", "") or s.get("expected_result", "") or ""
         lines.append(f"| {_cell(n)} | {_cell(action)} | {_cell(td)} | {_cell(er)} |")
     return "\n".join(lines) + "\n"
@@ -187,7 +211,7 @@ def json_to_md(data):
 
     # ── Шаги ──
     lines.append("## Шаги\n")
-    lines.append(_steps_table(data.get("steps", [])))
+    lines.append(_steps_table(data.get("steps", []), data.get("testData", [])))
 
     # ── Трассируемость ──
     trace = _traceability(data)

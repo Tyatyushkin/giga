@@ -47,3 +47,18 @@ Markdown and JSON must be content-identical.
 4. `variantOf` is null for main cases, points to main case ID for variants.
 5. All strings are UTF-8, no markdown formatting inside JSON fields.
 6. Arrays may be empty (`[]`) but never null.
+
+## Ссылки на тестовые данные в шагах
+
+`steps[].testData` может называть параметр ссылкой вместо того, чтобы вклеивать его значение:
+
+```json
+{"number": 1, "testData": "{Базовый URL шлюза}/gateway/admin/api/v1/topologies, {Логин администратора}"}
+```
+
+Конвертер подставляет значение из таблицы `testData` на место ссылки, поэтому URL можно
+составлять из базового адреса и пути. `{{` и `}}` — литеральные скобки.
+
+Зачем: раньше стодвадцатисимвольный URL приходилось писать дважды — в таблице и в шаге, — потому
+что проверка «значение используется» искала подстроку. Со ссылкой проверка точная: имя вне
+таблицы — BLOCKER, строка без единой ссылки и без вхождения значения — MAJOR.

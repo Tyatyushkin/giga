@@ -361,9 +361,14 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                     "Сверить с output/suites/_index.json / _reqindex.json — опечатка или "
                     "несуществующий (выдуманный) якорь требования")
 
+    # Путь к источнику нужен и здесь, и в блоке паритета ниже: ссылки на параметры
+    # видны только в JSON — в Markdown конвертер их уже разрешил.
+    json_path = path.with_suffix(".json")
+
     # --- test data -------------------------------------------------------
     data_rows = parse_table(sections.get("Тестовые данные", ""))
     data_values: list[str] = []
+    data_names: list[str] = []
     for i, row in enumerate(data_rows, start=1):
         if len(row) < 2:
             add("MAJOR", "data-table", f"Тестовые данные / строка {i}",
@@ -382,6 +387,7 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                 "Подставить конкретное, стабильное значение")
         else:
             data_values.append(value)
+            data_names.append(param.strip())
     if not data_rows:
         add("BLOCKER", "data-missing", "Тестовые данные",
             "Таблица тестовых данных отсутствует",
@@ -478,8 +484,15 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                 "Указать значение или «—»")
 
     # --- data usage & continuity ----------------------------------------
+    # Шаг может назвать параметр ссылкой `{Имя}` вместо того, чтобы вклеивать его
+    # значение текстом. Тогда «использован» проверяется по имени — точно, а не
+    # подстрокой, и стодвадцатисимвольный URL не приходится писать дважды.
+    referenced = referenced_names(json_path)
     used = 0
-    for value in data_values:
+    for name, value in zip(data_names, data_values):
+        if name and name in referenced:
+            used += 1
+            continue
         token = normalize_cell(value).lower().strip()
         if len(token) < 3:
             continue
@@ -488,7 +501,15 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
         else:
             add("MAJOR", "data-unused", "Тестовые данные",
                 f"Значение не используется ни в одном шаге: {value}",
-                "Использовать значение в шагах или убрать из таблицы")
+                "Использовать значение в шагах, сослаться на него как {" + (name or "Имя") +
+                "}, или убрать из таблицы")
+    dangling = sorted(referenced - set(data_names))
+    if dangling:
+        add("BLOCKER", "testdata-ref-unknown", "Шаги",
+            "Шаг ссылается на параметр, которого нет в таблице тестовых данных: "
+            + ", ".join("{" + d + "}" for d in dangling),
+            "Опечатка в имени или строка таблицы не заведена — ссылка осталась "
+            "неразрешённой и попала в Markdown как есть")
     if data_values and used == 0:
         add("BLOCKER", "no-data-continuity", "Шаги",
             "Ни одно тестовое значение не встречается в шагах — сценарий не связан данными",
@@ -502,11 +523,11 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                 "Проверять в поздних шагах объекты, созданные в ранних")
 
     # --- markdown / json parity -----------------------------------------
+    # (json_path объявлен выше — он же нужен блоку тестовых данных)
     # Полная сверка идёт первой: она сравнивает файл целиком, поэтому находит и то,
     # чего не видят пофайловые правила ниже — предусловия, таблицу данных,
     # постусловия, пробелы и вопросы. Правила ниже остаются: они называют, ЧТО именно
     # разошлось, а эта — что разошлось хоть что-нибудь.
-    json_path = path.with_suffix(".json")
     conv = converter()
     if conv is not None and json_path.exists():
         try:
@@ -597,7 +618,12 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                         continue
                     for key, col, label in fields:
                         md_val = normalize_cell(row[col])
-                        js_val = normalize_cell(str(jstep.get(key, "")))
+                        raw = str(jstep.get(key, ""))
+                        # Ссылка `{Имя}` в источнике и её значение в выводе — не
+                        # расхождение, а работа конвертера. Сравниваем разрешённое.
+                        if conv is not None and "{" in raw:
+                            raw = conv.resolve_refs(raw, data.get("testData", []))
+                        js_val = normalize_cell(raw)
                         if md_val != js_val:
                             add("MAJOR", "json-step-drift",
                                 f"{json_path.name} / шаг {idx}",
@@ -642,6 +668,28 @@ def converter():
             except Exception:
                 _CONVERTER = False
     return _CONVERTER or None
+
+
+TESTDATA_REF = re.compile(r"(?<!\{)\{([^{}]+)\}(?!\})")
+
+
+def referenced_names(json_path: Path) -> set[str]:
+    """Имена параметров, на которые ссылаются шаги через `{Имя}`.
+
+    Читается из JSON, а не из Markdown: в Markdown ссылки уже разрешены
+    конвертером, там их не видно по определению.
+    """
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+    names: set[str] = set()
+    for st in data.get("steps", []) or []:
+        if isinstance(st, dict):
+            cell = st.get("testData") or st.get("test_data") or ""
+            if isinstance(cell, str):
+                names.update(m.group(1).strip() for m in TESTDATA_REF.finditer(cell))
+    return names
 
 
 def orphan_json(target: Path) -> list[Path]:
