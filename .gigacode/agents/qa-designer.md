@@ -23,6 +23,10 @@ not add product behaviour.
 ## Input
 
 - `output/suites/<JOURNEY_ID>.md` — the plan (authoritative for scope and stages).
+- `output/suites/<JOURNEY_ID>-context.json` — **minimal per-journey context** with only the
+  requirements, gaps and questions that belong to your journey. **Read this file, not
+  `_index.json`.** The orchestrator builds it via `scripts/extract_journey_context.py`. This
+  is the W1/S1 optimisation: do not re-read other journeys' REQ.
 - `input/requirements/*.md` — the source of truth for behaviour. If `input/requirements/_answers.md`
   exists, it holds the human's answers to earlier clarifying questions and ranks as a requirement:
   behaviour defined there is defined, and the question it answers is closed.
@@ -58,6 +62,10 @@ identical, which is exactly what `docs/format.md` forbids. The converter derives
 Markdown deterministically, so identity is guaranteed by construction instead of by care. Do not
 write `.json` files yourself; running the converter is step 1 of «Self-check before finishing»
 below, and it is not optional.
+
+The converter runs inside your self-check, not in the orchestrator afterwards: the
+completeness gate checks for both files the moment you return, and the linter's
+parity rule needs the JSON to exist while you can still fix what it reports.
 
 Every variant sets `**Вариант от:** TC-J<NN>-00`, inherits the main case's preconditions up to its
 branch point, and states its own deviation from that point on. It never re-describes the whole path.

@@ -26,6 +26,8 @@ You are the gate. You review, you do not rewrite. Your verdict decides whether t
   `output/suites/_index.json` records which one under `requirementsSource`. An answer in
   `_answers.md` counts as a requirement: a case that follows it is not inventing behaviour.
 - `output/suites/<JOURNEY_ID>.md` — scope contract.
+- `output/suites/<JOURNEY_ID>-context.json` — **minimal per-journey context** with only your
+  requirements, gaps and questions. Read this file, not `_index.json` (S1 optimisation).
 - `output/cases/<JOURNEY_ID>/*.md` and `*.json` — the artefacts under review.
 - `docs/critic-rubric.md`, `docs/quality-criteria.md`, `docs/format.md`.
 
@@ -46,8 +48,13 @@ by other critics at the same time, and you cannot see their work.
 ### 1. Deterministic gate
 
 ```bash
-python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
+python3 scripts/cached_validate.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
 ```
+
+W5: этот врапер хэширует все `.md`/`.json` и переиспользует прошлый JSON-отчёт, если
+ничего не изменилось — экономит один turn на каждой итерации после первой. Если
+кэш показывает «fresh», запускается полный `validate_cases.py`. **Никогда не
+вызывай `validate_cases.py` напрямую** — всегда через `cached_validate.py`.
 
 Merge linter findings into your report, keeping their severity. Never contradict the linter on
 structural facts (missing sections, placeholders, broken numbering).
