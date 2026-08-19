@@ -188,6 +188,12 @@ python3 scripts/json_to_md.py output/cases/<JOURNEY_ID>/TC-*.json
 python3 scripts/validate_cases.py output/cases/<JOURNEY_ID>
 ```
 
+Before you return, confirm the two are in step without writing anything:
+
+```bash
+python3 scripts/json_to_md.py "output/cases/<JOURNEY_ID>/TC-*.json" --check
+```
+
 Run the converter again after any edit to a `.json` file — including fix-iteration edits — before
 you run the linter. A `.md` older than its `.json` is the one state this pipeline must never ship:
 the linter, the human at the gate and the report all read the Markdown.

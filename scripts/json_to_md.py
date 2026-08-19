@@ -32,7 +32,10 @@ def _field(value, fallback="—"):
     if value is None:
         return fallback
     if isinstance(value, list):
-        return fallback if not value else fallback
+        # Обе ветки возвращали fallback, поэтому непустой список рендерился как «—».
+        # Ни одно поле шапки сейчас не список, но `requirements` им является —
+        # первое же его появление здесь молча стёрло бы содержимое.
+        return ", ".join(str(v).strip() for v in value if str(v).strip()) or fallback
     return str(value).strip() or fallback
 
 
@@ -175,6 +178,12 @@ def main():
         help="Показать результат без записи файлов",
     )
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Ничего не писать; сравнить существующий .md с тем, что дал бы конвертер. "
+             "Код 1, если расходятся или .md отсутствует",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Не выводить результаты в stdout",
@@ -215,7 +224,19 @@ def main():
         md_content = json_to_md(data)
         md_path = Path(jf).with_suffix(".md")
 
-        if args.dry_run:
+        if args.check:
+            # Проверка «конвертер запускали?» обязана быть неразрушающей: запуск —
+            # это и есть проверяемое действие, и запись стирает улику.
+            if not md_path.is_file():
+                print(f"❌ {md_path} отсутствует — конвертер не запускали", file=sys.stderr)
+                fail_count += 1
+                continue
+            if md_path.read_text(encoding="utf-8") != md_content:
+                print(f"❌ {md_path} расходится с {jf} — конвертер не запускали "
+                      f"после правки JSON", file=sys.stderr)
+                fail_count += 1
+                continue
+        elif args.dry_run:
             if not args.quiet:
                 print(f"\n=== {jf} → {md_path} ===\n{md_content}")
         else:
@@ -224,8 +245,12 @@ def main():
         ok_count += 1
 
     if not args.quiet:
-        print(f"✅ Конвертировано: {ok_count}, Ошибок: {fail_count}")
+        verb = "Сверено" if args.check else "Конвертировано"
+        mark = "❌" if fail_count else "✅"
+        print(f"{mark} {verb}: {ok_count}, Ошибок: {fail_count}")
+
+    return 1 if fail_count else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

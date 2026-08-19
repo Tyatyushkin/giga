@@ -49,7 +49,13 @@ by other critics at the same time, and you cannot see their work.
 
 ```bash
 python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
+python3 scripts/json_to_md.py "output/cases/<JOURNEY_ID>/TC-*.json" --check
 ```
+
+The second command answers «was the converter run after the last JSON edit?» **without running
+it** — asking by converting would erase the very evidence. A non-zero exit means the Markdown you
+are reading is not the Markdown the JSON describes, and the case is not reviewable until the
+designer regenerates it.
 
 Merge linter findings into your report, keeping their severity. Never contradict the linter on
 structural facts (missing sections, placeholders, broken numbering).
