@@ -60,9 +60,13 @@ and lose the structural floor.
 python3 scripts/review_scope.py --journey <JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-scope.json
 ```
 
-On iteration 1 it returns «полное ревью» and you proceed as normal. On a fix iteration it tells
-you which cases actually changed, so passes 2–5 below are spent on those instead of re-confirming
-what you already confirmed.
+On iteration 1 it returns «полное ревью» and you proceed as normal — passes 2–5 run over every case.
+
+On a fix iteration, **passes 2–5 run only over `reviewRequired`.** Do not open, re-read, or
+re-derive findings for a case listed in `carryForward` — its findings are reprinted from the prior
+review (see below), not regenerated. Reading a `carryForward` case's steps again "just to be sure"
+is not extra rigor; it is the exact cost this step exists to remove, and it risks producing a
+finding that silently disagrees with the one already on record for the same case.
 
 The rules are fail-closed — it widens the scope whenever it cannot prove otherwise:
 

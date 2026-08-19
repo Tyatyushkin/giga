@@ -30,11 +30,15 @@ import re
 import sys
 from pathlib import Path
 
-# **REQ-01.** / **BR-001** / **BG-01** — bold id, optional trailing dot.
-REQ_ID = re.compile(r"\*\*([A-Z]{2,4}-\d{1,3})\.?\*\*")
+# **REQ-01.** / **BR-001** / **BG-01** / **P0-01** — bold id, optional trailing dot.
+# The prefix is letters with an optional trailing digit (P0, P1, …) — a bare digit right
+# before the dash is still part of the prefix, not the number that follows it. Found on
+# zvuk.md: "P0-01/02/03" is a real corpus prefix and the letters-only version missed it
+# silently (regex simply didn't match — no error, the ids were just never in reqIndex).
+REQ_ID = re.compile(r"\*\*([A-Z]{1,4}\d?-\d{1,3})\.?\*\*")
 
 # A list item that opens with a requirement id.
-LIST_ITEM = re.compile(r"^\s*[-*]\s+\*\*([A-Z]{2,4}-\d{1,3})\.?\*\*\s*(.*)$")
+LIST_ITEM = re.compile(r"^\s*[-*]\s+\*\*([A-Z]{1,4}\d?-\d{1,3})\.?\*\*\s*(.*)$")
 
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 

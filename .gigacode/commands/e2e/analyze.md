@@ -40,14 +40,11 @@ python3 scripts/build_gate_questions.py --parallel 1 --unit journey
 ```
 
 This writes `output/gate/questions.json`. Take the five lists above from its `lists` field, then pass
-`gateQuestions` (here: only В1 — покрытие) to your runtime's interactive question tool
-(`ask_user_question` / `AskUserQuestion`) **verbatim** — same `header`, same `question`, same options
-in the same order. Do not reword them, do not add an «Другое» option, do not answer on my behalf, and
-make the tool call the last action in your message.
+`gateQuestions` (here: only В1 — покрытие) to your runtime's interactive question tool **verbatim** —
+same `header`, same `question`, same options in the same order. Do not reword them, do not add an
+«Другое» option, do not answer on my behalf.
 
-If the tool call fails, repair it once (`header` ≤ 12 chars, `label` ≤ 5 words, ≤ 4 options) and retry.
-If it fails again, print the **same options** as a numbered list, add «ответьте номером или своим
-вариантом», and end your turn immediately. Never turn a multiple-choice gate into an open question.
+!{cat docs/question-protocol.md}
 
 Record my answer in `output/gate/answers.json` as
 `{"coverage": "continue|answer-now|stop", "parallel": 1, "unit": "journey", "answers": []}`.
