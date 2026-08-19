@@ -14,6 +14,7 @@ Exit code 0 = no blockers, 1 = blockers found, 2 = nothing to check.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
@@ -486,7 +487,24 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                 "Проверять в поздних шагах объекты, созданные в ранних")
 
     # --- markdown / json parity -----------------------------------------
+    # Полная сверка идёт первой: она сравнивает файл целиком, поэтому находит и то,
+    # чего не видят пофайловые правила ниже — предусловия, таблицу данных,
+    # постусловия, пробелы и вопросы. Правила ниже остаются: они называют, ЧТО именно
+    # разошлось, а эта — что разошлось хоть что-нибудь.
     json_path = path.with_suffix(".json")
+    conv = converter()
+    if conv is not None and json_path.exists():
+        try:
+            expected = conv.json_to_md(json.loads(json_path.read_text(encoding="utf-8")))
+        except Exception:
+            expected = None
+        if expected is not None and expected != text:
+            add("BLOCKER", "md-stale", str(path.name),
+                "Markdown не совпадает с тем, что даёт конвертер из JSON — "
+                "значит его правили руками или не перегенерировали после правки JSON",
+                "Перегенерировать: python3 scripts/json_to_md.py "
+                f"{json_path}")
+
     if not json_path.exists():
         add("BLOCKER", "json-missing", str(json_path.name),
             "Нет JSON-версии кейса — а JSON первичен, значит этот Markdown написан руками "
@@ -539,6 +557,33 @@ def collect(target: Path) -> list[Path]:
         p for p in target.rglob("*.md")
         if not p.name.startswith("_") and "review" not in p.name.lower()
     )
+
+
+_CONVERTER = None
+
+
+def converter():
+    """`json_to_md` as a module, or None when it cannot be loaded.
+
+    The parity rules below compare hand-picked fields — id, step count, three step
+    columns — so a divergence in preconditions, test data, postconditions, gaps or
+    questions passes unseen. The converter already knows the whole answer: what the
+    Markdown must be. Asking it turns a partial comparison into a total one.
+    """
+    global _CONVERTER
+    if _CONVERTER is None:
+        path = Path(__file__).with_name("json_to_md.py")
+        if not path.is_file():
+            _CONVERTER = False
+        else:
+            try:
+                spec = importlib.util.spec_from_file_location("json_to_md", path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                _CONVERTER = mod
+            except Exception:
+                _CONVERTER = False
+    return _CONVERTER or None
 
 
 def orphan_json(target: Path) -> list[Path]:
