@@ -47,13 +47,18 @@ for _stream in (sys.stdout, sys.stderr):
 # scripts/start_run.py. Its absence is handled separately, and also means full review.
 RUN_FILE = "output/.run"
 
+# The corpus is NOT listed here: which files hold the requirements is a property of
+# the run, not of the repository. A hardcoded input/requirements silently skips any
+# corpus outside it — see corpus_inputs().
 GLOBAL_INPUTS = [
     RUN_FILE,
-    "input/requirements",
     "docs/critic-rubric.md",
     "docs/quality-criteria.md",
     "docs/format.md",
 ]
+
+INDEX_FILE = "output/suites/_index.json"
+CORPUS_FALLBACK = "input/requirements"
 
 MAIN_CASE = re.compile(r"TC-J\d{2}-00$")
 
@@ -86,9 +91,32 @@ def current_run_id() -> str | None:
         return None
 
 
+def corpus_inputs() -> list[str]:
+    """Where this run's requirements actually live, per the analyst's own index.
+
+    A run against input/requirements-knox/ used to hash input/requirements/ — so
+    editing the corpus between iterations changed nothing, and findings carried over
+    as confirmed while the behaviour under them had been redefined. That is the exact
+    fail-open this mechanism exists to prevent, so an unreadable index falls back to
+    the default corpus path rather than to nothing.
+    """
+    path = Path(INDEX_FILE)
+    if not path.is_file():
+        return [CORPUS_FALLBACK]
+    try:
+        sources = json.loads(path.read_text(encoding="utf-8")).get("requirementsSource")
+    except json.JSONDecodeError:
+        return [CORPUS_FALLBACK]
+    if isinstance(sources, str):
+        sources = [sources]
+    if not isinstance(sources, list) or not sources:
+        return [CORPUS_FALLBACK]
+    return [str(s) for s in sources if isinstance(s, str) and s]
+
+
 def global_fingerprint() -> dict[str, str]:
     fp: dict[str, str] = {}
-    for entry in GLOBAL_INPUTS:
+    for entry in GLOBAL_INPUTS + corpus_inputs():
         fp.update(hash_tree(Path(entry)))
     return fp
 

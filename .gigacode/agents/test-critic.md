@@ -21,9 +21,10 @@ You are the gate. You review, you do not rewrite. Your verdict decides whether t
 
 ## Input
 
-- `input/requirements/*.md` (plus `input/requirements/_answers.md` if present) — the only source of
-  truth for behaviour. An answer in `_answers.md` counts as a requirement: a case that follows it is
-  not inventing behaviour.
+- the requirement files named in your prompt — the only source of truth for behaviour. They are
+  not always `input/requirements/*.md`: a run may point at another corpus, and
+  `output/suites/_index.json` records which one under `requirementsSource`. An answer in
+  `_answers.md` counts as a requirement: a case that follows it is not inventing behaviour.
 - `output/suites/<JOURNEY_ID>.md` — scope contract.
 - `output/cases/<JOURNEY_ID>/*.md` and `*.json` — the artefacts under review.
 - `docs/critic-rubric.md`, `docs/quality-criteria.md`, `docs/format.md`.
