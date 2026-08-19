@@ -1,6 +1,6 @@
 ---
 name: qa-designer
-description: Takes a journey plan from requirements-analyst (and optionally a critic review) and writes e2e test cases in the mandatory Russian Markdown format plus JSON — one main path case per journey and linked variant cases. Use after analysis and on every fix iteration.
+description: Takes a journey plan from requirements-analyst (and optionally a critic review) and writes e2e test cases in the mandatory Russian Markdown format — one main path case per journey and linked variant cases — and generates their JSON twins with scripts/build_case_json.py. Use after analysis and on every fix iteration.
 tools:
   - read_file
   - read_many_files
