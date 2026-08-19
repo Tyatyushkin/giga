@@ -1,8 +1,8 @@
 {
-  "journeyId": "J01-knox-topology-webhdfs",
-  "runId": "20260819T115235-7abd13",
+  "journeyId": "J01-knox-topology-lifecycle",
+  "runId": "20260819T121604-e43c08",
   "global": {
-    "output/.run": "d44528dca24e76ec",
+    "output/.run": "f7b7d3e86b4a3a46",
     "input/requirements/_answers.md": "0b7b2b1850e8fd19",
     "input/requirements/zvuk-sample.md": "63841bb3835a8867",
     "input/requirements/zvuk.md": "9b716b7d3f878a0c",
@@ -10,11 +10,10 @@
     "docs/quality-criteria.md": "fd9eb9ad0f9b8ae2",
     "docs/format.md": "10147df13ea81d33"
   },
-  "plan": "e89c777ca2228c37",
+  "plan": "274d0b0766444081",
   "cases": {
-    "TC-J01-00": "cf5cc3d1af29cd65",
-    "TC-J01-01": "b09cd71bd11498d0",
-    "TC-J01-02": "7cae92aa28c39f9d",
-    "TC-J01-03": "9b415860bb590882"
+    "TC-J01-00": "4dac6dc6763a8d79",
+    "TC-J01-01": "231e5ee9741eb796",
+    "TC-J01-02": "389e72b07efc6b47"
   }
 }

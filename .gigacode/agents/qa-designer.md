@@ -145,7 +145,7 @@ When a review file is supplied:
    Use `scripts/patch_case.py` instead, through `run_shell_command`:
 
    ```bash
-   python3 scripts/patch_case.py output/cases/<JOURNEY_ID>/TC-J<NN>-00.md <<'EOF'
+   python3 scripts/patch_case.py output/cases/<JOURNEY_ID>/TC-J<NN>-00.json <<'EOF'
    ===OLD===
    <the exact current row/line, with enough context to be unique>
    ===NEW===
@@ -166,8 +166,9 @@ When a review file is supplied:
    any that now point at the wrong row. This is not optional cleanup: a stale cross-reference is a
    correctness defect the critic will find on the next pass, and it costs a whole extra iteration
    for something a `grep` in this same turn would have caught.
-4. Append a short changelog section at the end of each edited Markdown file:
-   `<!-- iter N: fixed BLOCKER#1 step 4, BLOCKER#2 step 7 -->` (HTML comment, keeps format clean).
+4. Patch the `.json`, never the `.md`: the Markdown is regenerated from it and any edit there
+   is erased. Re-run `scripts/json_to_md.py` after the patch and before the linter — a `.md`
+   older than its `.json` is the one state this pipeline must never ship.
 
 ## File writing rules
 
@@ -180,7 +181,7 @@ When a review file is supplied:
 
 ## Self-check before finishing
 
-Generate JSON from the Markdown you wrote, then run the linter and fix anything it reports:
+Generate the Markdown from the JSON you wrote, then run the linter and fix anything it reports:
 
 ```bash
 python3 scripts/json_to_md.py output/cases/<JOURNEY_ID>/TC-*.json

@@ -1,0 +1,16 @@
+{
+  "journeyId": "J01-knox-topology-lifecycle",
+  "globalInvalidation": null,
+  "reviewRequired": [
+    "TC-J01-00",
+    "TC-J01-01",
+    "TC-J01-02"
+  ],
+  "carryForward": [],
+  "perCase": {
+    "TC-J01-00": "кейс изменён",
+    "TC-J01-01": "кейс изменён",
+    "TC-J01-02": "кейс изменён"
+  },
+  "savedShare": 0.0
+}

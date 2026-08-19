@@ -1,6 +1,13 @@
 {
-  "requirementsSource": [
-    "input/requirements-knox/knox-demo.md"
+  "journeyId": "J01-knox-topology-lifecycle",
+  "title": "Развернуть топологию шлюза, записать и прочитать файл через WebHDFS, удалить топологию",
+  "plan": "output/suites/J01-knox-topology-lifecycle.md",
+  "primaryArea": "проксирование WebHDFS",
+  "areas": [
+    "проксирование WebHDFS",
+    "администрирование топологий",
+    "жизненный цикл топологии",
+    "аутентификация"
   ],
   "reqIndex": [
     {
@@ -34,86 +41,53 @@
       "source": "knox-demo.md § Жизненный цикл топологии"
     }
   ],
-  "journeys": [
-    {
-      "id": "J01-knox-topology-lifecycle",
-      "plan": "output/suites/J01-knox-topology-lifecycle.md",
-      "title": "Развернуть топологию шлюза, записать и прочитать файл через WebHDFS, удалить топологию",
-      "priority": "Критический",
-      "areas": [
-        "проксирование WebHDFS",
-        "администрирование топологий",
-        "жизненный цикл топологии",
-        "аутентификация"
-      ],
-      "primaryArea": "проксирование WebHDFS",
-      "stages": 8,
-      "variants": [
-        "TC-J01-01",
-        "TC-J01-02"
-      ],
-      "reqs": [
-        "REQ-01",
-        "REQ-02",
-        "REQ-03",
-        "REQ-04",
-        "REQ-05",
-        "REQ-06"
-      ],
-      "stagesWithoutReq": 0,
-      "gaps": 7,
-      "questions": 7
-    }
-  ],
-  "uncoveredReqs": [],
   "gaps": [
     {
       "id": "G-01",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Адрес шлюза не задан ни одним требованием — во всех URL стоит плейсхолдер <хост>. Схема (HTTPS) и порт (8443) заданы, хост нет; ни один шаг кейса не может назвать конкретный URL",
-      "quote": "Запрос `PUT https://<хост>:8443/gateway/admin/api/v1/topologies/<имя>` от `admin` … возвращает HTTP 200"
+      "quote": "Запрос `PUT https://<хост>:8443/gateway/admin/api/v1/topologies/<имя>` от `admin` … возвращает HTTP 200",
+      "resolvedBy": null
     },
     {
       "id": "G-02",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Состав XML-описания топологии не приведён — названы только провайдер и сервис, тело запроса PUT дизайнер записать не может",
-      "quote": "с XML-описанием топологии (провайдер ShiroProvider, сервис WEBHDFS) возвращает HTTP 200"
+      "quote": "с XML-описанием топологии (провайдер ShiroProvider, сервис WEBHDFS) возвращает HTTP 200",
+      "resolvedBy": null
     },
     {
       "id": "G-03",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Определён единственный сценарий отказа аутентификации — неверный пароль. Запрос вовсе без заголовка Basic-аутентификации и запрос от пользователя, которого нет в LDAP, не описаны",
-      "quote": "Любой запрос через шлюз требует Basic-аутентификации против LDAP… Запрос с неверным паролем возвращает HTTP 401, тело ответа содержит текст `Authentication failed`"
+      "quote": "Любой запрос через шлюз требует Basic-аутентификации против LDAP… Запрос с неверным паролем возвращает HTTP 401, тело ответа содержит текст `Authentication failed`",
+      "resolvedBy": null
     },
     {
       "id": "G-04",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Не описано, что возвращают административные операции PUT и DELETE топологии под учётной записью `guest`: обе формулировки называют только `admin`, а REQ-01 отсылает за кодом ответа обратно к ним",
-      "quote": "Запрос `PUT …/topologies/<имя>` от `admin` … возвращает HTTP 200 | Запрос `DELETE …/admin/api/v1/topologies/<имя>` от `admin` возвращает HTTP 200 | код ответа определяется операцией (REQ-02…REQ-06)"
+      "quote": "Запрос `PUT …/topologies/<имя>` от `admin` … возвращает HTTP 200 | Запрос `DELETE …/admin/api/v1/topologies/<имя>` от `admin` возвращает HTTP 200 | код ответа определяется операцией (REQ-02…REQ-06)",
+      "resolvedBy": null
     },
     {
       "id": "G-05",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Не описано состояние в интервале между HTTP 200 на PUT топологии и её появлением в списке: что gateway-URL отвечает до этого момента, не сказано",
-      "quote": "Не позднее чем через 30 секунд топология присутствует в ответе `GET …/topologies` …, а её gateway-URL начинает обрабатывать запросы REQ-03…REQ-05"
+      "quote": "Не позднее чем через 30 секунд топология присутствует в ответе `GET …/topologies` …, а её gateway-URL начинает обрабатывать запросы REQ-03…REQ-05",
+      "resolvedBy": null
     },
     {
       "id": "G-06",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Не описан повторный деплой топологии с уже занятым именем: свободное имя задано как предусловие, поведение PUT на существующее имя не определено",
-      "quote": "Перед деплоем топологии с этим именем в списке `GET …/topologies` нет"
+      "quote": "Перед деплоем топологии с этим именем в списке `GET …/topologies` нет",
+      "resolvedBy": null
     },
     {
       "id": "G-07",
-      "journey": "J01-knox-topology-lifecycle",
       "what": "Не описана запись поверх существующего файла, хотя параметр overwrite=true стоит в самом требовании: код ответа, значение Location и итоговое содержимое при перезаписи не заданы",
-      "quote": "Запрос `PUT …/webhdfs/v1/<путь к файлу>?op=CREATE&overwrite=true` с содержимым в теле создаёт файл: HTTP 201, заголовок `Location` содержит путь файла"
+      "quote": "Запрос `PUT …/webhdfs/v1/<путь к файлу>?op=CREATE&overwrite=true` с содержимым в теле создаёт файл: HTTP 201, заголовок `Location` содержит путь файла",
+      "resolvedBy": null
     }
   ],
   "questions": [
     {
       "id": "Q-01",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Какой хост (или полный базовый URL) шлюза Knox использовать в прогоне вместо плейсхолдера <хост>?",
       "blocks": [
         "этап 1",
@@ -127,64 +101,65 @@
         "TC-J01-01",
         "TC-J01-02"
       ],
-      "severity": "blocking"
+      "answered": false,
+      "answer": null
     },
     {
       "id": "Q-02",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Приведите полное XML-описание топологии, которое считается валидным для PUT: провайдер ShiroProvider и сервис WEBHDFS — какое именно тело запроса отправлять?",
       "blocks": [
         "этап 2"
       ],
-      "severity": "blocking"
+      "answered": false,
+      "answer": null
     },
     {
       "id": "Q-03",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Что возвращает шлюз на запрос без заголовка Basic-аутентификации и на запрос от пользователя, которого нет в демонстрационном LDAP: тот же HTTP 401 с телом `Authentication failed` или что-то иное?",
       "blocks": [
         "вариант к этапу 4"
       ],
-      "severity": "advisory"
+      "answered": false,
+      "answer": null
     },
     {
       "id": "Q-04",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Что возвращают `PUT …/topologies/<имя>` и `DELETE …/topologies/<имя>` под учётной записью `guest` / `guest-password`?",
       "blocks": [
         "вариант к этапу 2",
         "вариант к этапу 7"
       ],
-      "severity": "advisory"
+      "answered": false,
+      "answer": null
     },
     {
       "id": "Q-05",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Что возвращает gateway-URL топологии в интервале между HTTP 200 на PUT и появлением топологии в `GET …/topologies`?",
       "blocks": [
         "этап 4",
         "вариант «запрос сразу после деплоя»"
       ],
-      "severity": "advisory"
+      "answered": false,
+      "answer": null
     },
     {
       "id": "Q-06",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Что возвращает `PUT …/topologies/<имя>` на имя, которое уже присутствует в `GET …/topologies`?",
       "blocks": [
         "вариант к этапу 2"
       ],
-      "severity": "advisory"
+      "answered": false,
+      "answer": null
     },
     {
       "id": "Q-07",
-      "journey": "J01-knox-topology-lifecycle",
       "question": "Что возвращает `PUT …?op=CREATE&overwrite=true` на существующий путь: тот же HTTP 201 с заголовком `Location`, и совпадает ли последующее чтение с новым содержимым?",
       "blocks": [
         "вариант к этапам 5–6",
         "повторный прогон journey на том же пути файла"
       ],
-      "severity": "advisory"
+      "answered": false,
+      "answer": null
     }
   ]
 }
