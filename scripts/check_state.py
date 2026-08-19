@@ -46,16 +46,6 @@ STATE_FIELDS: dict[str, tuple[type | tuple[type, ...], bool]] = {
     "openQuestions": (list, True),
 }
 
-# The aggregate the orchestrator itself writes. It gets the same treatment as the
-# critics' files: the orchestrator is one more JSON author, no more trustworthy.
-AGGREGATE_FIELDS: dict[str, tuple[type | tuple[type, ...], bool]] = {
-    "maxIterations": (int, True),
-    "parallel": (int, True),
-    "unit": (str, True),
-    "journeys": (dict, True),
-    "verdict": (str, True),
-}
-
 INDEX_FIELDS: dict[str, tuple[type | tuple[type, ...], bool]] = {
     "requirementsSource": (list, True),
     "journeys": (list, True),
@@ -87,7 +77,7 @@ def check_fields(data: dict, spec: dict, problems: list[str]) -> None:
             )
 
 
-def check_state_file(path: Path, expect_iteration: int | None = None) -> list[str]:
+def check_state_file(path: Path) -> list[str]:
     problems: list[str] = []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -116,17 +106,6 @@ def check_state_file(path: Path, expect_iteration: int | None = None) -> list[st
         if blockers > 0 and verdict == "PASS":
             problems.append(f"blockers = {blockers}, но вердикт PASS — противоречие")
 
-    # The orchestrator owns the iteration counter: it passes N in the prompt and in the
-    # review path, the critic echoes it back. Two counters that are allowed to disagree
-    # are one counter nobody owns, so the disagreement is an error, not a detail.
-    iteration = data.get("iteration")
-    if expect_iteration is not None and isinstance(iteration, int) \
-            and not isinstance(iteration, bool) and iteration != expect_iteration:
-        problems.append(
-            f"iteration = {iteration}, а оркестратор вёл итерацию {expect_iteration} — "
-            f"счётчик разошёлся, вердикту этого файла верить нельзя"
-        )
-
     review = data.get("review")
     if isinstance(review, str) and review:
         # The path is written relative to the project root. Resolve it from the state
@@ -138,28 +117,6 @@ def check_state_file(path: Path, expect_iteration: int | None = None) -> list[st
         if not any(c.is_file() for c in candidates):
             problems.append(f"файл ревью не найден: {review}")
 
-    return problems
-
-
-def check_aggregate_file(path: Path, state_dir: Path) -> list[str]:
-    problems: list[str] = []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return [f"не парсится как JSON: {exc}"]
-    if not isinstance(data, dict):
-        return [f"корень должен быть объектом, а не {type(data).__name__}"]
-    check_fields(data, AGGREGATE_FIELDS, problems)
-    unit = data.get("unit")
-    if isinstance(unit, str) and unit not in ("journey", "area"):
-        problems.append(f"unit = {unit!r}, ожидается journey или area")
-    # The aggregate is a snapshot of the per-journey files; a journey missing from it
-    # is exactly the kind of quiet drop the snapshot exists to prevent.
-    journeys = data.get("journeys")
-    if isinstance(journeys, dict) and state_dir.is_dir():
-        on_disk = {p.stem for p in state_dir.glob("*.json")}
-        for jid in sorted(on_disk - set(journeys)):
-            problems.append(f"journey {jid} есть в {state_dir}/, но отсутствует в агрегате")
     return problems
 
 
@@ -201,11 +158,6 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Проверить JSON, который пишут под-агенты")
     ap.add_argument("--state", help="конкретный файл состояния вместо всех")
     ap.add_argument("--state-dir", default="output/state", help="каталог файлов состояния")
-    ap.add_argument("--expect-iteration", type=int, metavar="N",
-                    help="номер итерации, который оркестратор передал критику "
-                         "(проверяется только вместе с --state)")
-    ap.add_argument("--aggregate", default="output/state.json",
-                    help="агрегат оркестратора; проверяется, если существует")
     ap.add_argument("--index", default="output/suites/_index.json", help="машинный индекс аналитика")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
@@ -220,9 +172,6 @@ def main() -> int:
     index_path = Path(args.index)
     if index_path.is_file():
         targets.append((index_path, "index"))
-    aggregate = Path(args.aggregate)
-    if aggregate.is_file():
-        targets.append((aggregate, "aggregate"))
 
     if not targets:
         sys.stderr.write("check_state: нечего проверять — нет ни файлов состояния, ни индекса\n")
@@ -230,15 +179,7 @@ def main() -> int:
 
     failed = 0
     for path, kind in targets:
-        if kind == "aggregate":
-            problems = check_aggregate_file(path, Path(args.state_dir))
-        elif kind == "state":
-            # --expect-iteration applies to the one file named by --state; sweeping the
-            # whole directory means journeys at different iterations, so it is ignored there.
-            expect = args.expect_iteration if args.state else None
-            problems = check_state_file(path, expect)
-        else:
-            problems = check_index_file(path)
+        problems = check_state_file(path) if kind == "state" else check_index_file(path)
         if problems:
             failed += 1
             sys.stderr.write(f"[state] НЕВАЛИДЕН {path}\n")

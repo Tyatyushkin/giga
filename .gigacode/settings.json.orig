@@ -1,0 +1,18 @@
+{
+    "model": {
+        "enableOpenAILogging": true,
+        "openAILoggingDir": "./logs"
+    },
+    "telemetry": {
+        "enabled": true,
+        "outfile": "./logs/telemetry/raw/run.log",
+        "logPrompts": false
+    },
+    "permissions": {
+        "allow": [
+            "Bash(python3 *)",
+            "Bash(find *)",
+            "Bash(grep *)"
+        ]
+    }
+}

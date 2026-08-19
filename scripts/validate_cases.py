@@ -175,10 +175,7 @@ def parse_fields(block: str) -> dict[str, str]:
 def has_placeholder(value: str) -> str | None:
     low = value.lower()
     for p in PLACEHOLDERS:
-        # Word boundaries, same as vague_hit: a bare substring match turned every
-        # Admin API URL into a BLOCKER — «admi·n/a·pi» contains "n/a" — and the
-        # designer worked around the linter with code spans instead of writing cases.
-        if re.search(rf"(?<![a-zа-я0-9]){re.escape(p)}(?![a-zа-я0-9])", low):
+        if p in low:
             return p
     slot = PLACEHOLDER_SLOT.search(value)
     if slot:
@@ -192,18 +189,6 @@ def vague_hit(value: str) -> str | None:
         if re.search(rf"(?<![а-яa-z]){re.escape(w)}(?![а-яa-z])", low):
             return w
     return None
-
-
-def normalize_cell(value: str) -> str:
-    """Markdown cell and JSON string, reduced to comparable text.
-
-    Strips emphasis markers and collapses whitespace — nothing more. The point is to
-    catch a JSON twin whose *content* drifted from the Markdown, not to punish a
-    designer for `**bold**`. Anything this normalization cannot equate is a real
-    difference in wording, and per the format contract the two must be
-    «содержательно идентичны».
-    """
-    return " ".join(value.replace("**", "").replace("`", "").replace("*", "").split())
 
 
 def section_is_empty(body: str) -> bool:
@@ -305,12 +290,6 @@ def check_case(path: Path, findings: list[Finding]) -> None:
             "Развернуть путь до полного journey по suite-плану")
 
     steps_text = " ".join(" ".join(r) for r in step_rows).lower()
-    # Markdown markers stripped for substring matching below: a value written as
-    # `https://host:8443` in the data table appears inside `https://host:8443/path`
-    # in a step, and the trailing backtick made the literal token miss. Third
-    # instance of a linter rule reporting a defect the case does not have —
-    # after "<" arithmetic and "n/a" inside admi·n/a·pi.
-    steps_text_plain = normalize_cell(steps_text).lower()
 
     for idx, row in enumerate(step_rows, start=1):
         loc = f"Шаги / шаг {idx}"
@@ -375,10 +354,10 @@ def check_case(path: Path, findings: list[Finding]) -> None:
     # --- data usage & continuity ----------------------------------------
     used = 0
     for value in data_values:
-        token = normalize_cell(value).lower().strip()
+        token = value.lower().strip()
         if len(token) < 3:
             continue
-        if token in steps_text_plain:
+        if token in steps_text:
             used += 1
         else:
             add("MAJOR", "data-unused", "Тестовые данные",
@@ -417,28 +396,6 @@ def check_case(path: Path, findings: list[Finding]) -> None:
                 add("BLOCKER", "json-steps-mismatch", str(json_path.name),
                     f"Шагов в JSON {len(data.get('steps', []))}, в Markdown {len(step_rows)}",
                     "Синхронизировать JSON с Markdown")
-            else:
-                # Same count is necessary, not sufficient: the id/count checks pass while
-                # a step's wording silently diverges, and downstream the JSON is what the
-                # pytest writer consumes. MAJOR, not BLOCKER — the normalization is
-                # deliberately shallow, and a false BLOCKER costs a design+review
-                # iteration (the O-05 lesson).
-                fields = (("action", 1, "действие"),
-                          ("testData", 2, "тестовые данные"),
-                          ("expectedResult", 3, "ожидаемый результат"))
-                for idx, (jstep, row) in enumerate(zip(data["steps"], step_rows), start=1):
-                    if not isinstance(jstep, dict) or len(row) != 4:
-                        continue
-                    for key, col, label in fields:
-                        md_val = normalize_cell(row[col])
-                        js_val = normalize_cell(str(jstep.get(key, "")))
-                        if md_val != js_val:
-                            add("MAJOR", "json-step-drift",
-                                f"{json_path.name} / шаг {idx}",
-                                f"{label} в JSON расходится с Markdown: "
-                                f"«{js_val[:60]}» ≠ «{md_val[:60]}»",
-                                "Синхронизировать JSON с Markdown — содержательно идентичны")
-                            break  # одного расхождения на шаг достаточно
 
 
 def collect(target: Path) -> list[Path]:

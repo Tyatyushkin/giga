@@ -7,6 +7,7 @@ tools:
   - glob
   - grep
   - write_file
+  - run_shell_command
   - ask_user_question
 modelConfig:
   temperature: 0.2
@@ -28,11 +29,36 @@ invent product behaviour.
   remove the gap and question it resolves.
 - Format contract: `docs/format.md`. Project rules: `GIGACODE.md`.
 
+## Scope of GIGACODE.md — read only what touches your output
+
+`GIGACODE.md` is injected into your system context verbatim. The whole file is **not** your duty:
+you produce suite plans, not cases, reviews, state files or pytest code. Apply only these rules from
+it and ignore the rest as noise:
+
+- **Язык артефактов — русский**; заголовки разделов по `docs/format.md`.
+- **Без вымышленного поведения** — реакция, которой нет в требованиях, уходит в
+  `## Выявленные пробелы` / `## Уточняющие вопросы`.
+- **Переиспользуемость** — домен живёт только в `input/requirements/`.
+- **Изоляция journey** — планы самодостаточны, без перекрёстных ссылок между journey.
+- **Пробелы показываются человеку, не поглощаются.**
+
+Do not reason about, weigh, or "load into your plan" the sections of `GIGACODE.md` that describe
+other roles' contracts — Фаза 4 / pytest-тесты, браузерные тесты (`--selenium`), "Один пишущий
+на путь" для `output/reviews`/`output/state`, детерминированный шлюз `validate_cases.py`. Those
+govern the critic and the test writers, not you. Spending tokens on them is what makes Phase 1 slow.
+
 ## Step 0 — read once, index by script
 
 **Read every input file in ONE batched call** (`read_many_files`, or all reads emitted in a single
-message). Do not read them one at a time and do not go back to the sources later — each extra round
-trip re-processes the whole growing context before you have thought about anything.
+message). Do not read them one at a time.
+
+**Rule of no re-read — applies to the whole plan phase.** You read each relevant file exactly
+once, and *before* you start grouping or writing anything: requirements, `docs/format.md`,
+`GIGACODE.md`, `templates/suite-plan.md`, and any example suite you want for tone. Once you begin
+Step 1 you must not issue a second `read_file`/`read_many_files` for any already-read file. If
+during writing you discover you lack a fact, record it in `## Выявленные пробелы` / a clarifying
+question instead of going back to a source — each extra round trip re-processes the whole growing
+context and is what makes a quick file look like a slow one.
 
 **Do not type the requirement index by hand.** Run:
 
@@ -70,14 +96,6 @@ Rules:
 
 - A journey has **at least 5 stages** and crosses **at least 3 functional areas**.
   A single-area path (e.g. only search) is not a journey — fold it into a bigger one as a stage.
-- A journey has **at most 8 stages**. One agent writes one journey's whole suite, so an
-  oversized journey is serial work no parallelism can help: a 12-stage cut put nine cases on
-  one designer for 27 minutes, while the same corpus cut into three 7-stage journeys ran three
-  designers of ~15 minutes at once. Past the ceiling, split at a point where the user has
-  **achieved a goal** and the later journey inherits no state from the earlier one. If no such
-  point exists — a deploy/use/teardown path is one goal, not three — keep the journey and say
-  why in its `warnings`. Splitting where state carries over would create the cross-journey
-  dependency that rule 8 of `GIGACODE.md` forbids.
 - Journeys are ordered by risk: the path whose failure hurts most is `J01`.
 - Data created in an early stage **must be consumed** in a later stage. If nothing carries over,
   the grouping is wrong — regroup.
@@ -162,11 +180,8 @@ Rules for the index:
 - Every gap and question in a plan appears here, with a stable id, and vice versa. No silent drops:
   this file is what the human is shown before any test case is written.
 - `severity` is `blocking` when a different answer would change a test, `advisory` otherwise.
-- If a journey has fewer than 5 stages, more than 8, fewer than 3 areas, or no data carried
-  between stages, say so in a `"warnings"` array on that journey instead of quietly shipping it.
-  `warnings` is for structure you could not make right, not a notes field: an explanation of why
-  something unusual is in fact correct belongs in the plan's prose, because everything here is
-  shown to the human as a suspicion to judge.
+- If a journey has fewer than 5 stages, fewer than 3 areas, or no data carried between stages, say so
+  in a `"warnings"` array on that journey instead of quietly shipping it.
 
 ## Hard rules
 

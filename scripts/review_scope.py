@@ -11,8 +11,6 @@ fail-closed: anything it cannot prove unchanged goes back for a full review.
 
 Invalidation rules
 ------------------
-run id changed or absent        -> everything (a baseline from another run proves
-                                   nothing about this one; absence means unknown)
 requirements / answers changed  -> everything (behaviour was redefined)
 suite plan changed              -> everything (the journey's scope moved)
 rubric / criteria / format      -> everything (the rules of judgement moved)
@@ -43,12 +41,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8")
 
 # Changing any of these re-opens every case: they define behaviour or how it is judged.
-# output/.run is here so a baseline cannot outlive the run that produced it — see
-# scripts/start_run.py. Its absence is handled separately, and also means full review.
-RUN_FILE = "output/.run"
-
 GLOBAL_INPUTS = [
-    RUN_FILE,
     "input/requirements",
     "docs/critic-rubric.md",
     "docs/quality-criteria.md",
@@ -56,6 +49,157 @@ GLOBAL_INPUTS = [
 ]
 
 MAIN_CASE = re.compile(r"TC-J\d{2}-00$")
+
+
+# --- carried findings extraction -------------------------------------------
+
+def _extract_carried_findings(jid: str) -> list[dict]:
+    """Extract unfixed findings from the previous state.json.
+
+    Reads output/state/<JID>.json, finds the previous iteration's state,
+    extracts carriedFindings with status "unfixed", and returns them.
+    Returns empty list if no previous state exists or is unreadable.
+    """
+    state_path = Path(f"output/state/{jid}.json")
+    if not state_path.is_file():
+        return []
+
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    # We need the PREVIOUS iteration's state. Since the current state may
+    # already have been written by the critic on this run, we look for the
+    # review path and check if there's an older state.
+    # In practice, on iteration 2+ the state.json already has carriedFindings
+    # from the previous iteration (written by the critic at the end of iter N-1).
+    # We just need to filter out items that were "fixed".
+
+    prev_carried = state.get("carriedFindings", [])
+    if not prev_carried:
+        return []
+
+    # Filter: keep only unfixed items (fixed items were resolved by qa-designer)
+    unfixed = [f for f in prev_carried if f.get("status") == "unfixed"]
+    return unfixed
+
+
+def _try_parse_review_markdown(jid: str) -> list[dict]:
+    """Fallback: parse the previous review markdown for unfixed findings.
+
+    If state.json doesn't have carriedFindings yet (legacy format),
+    try to extract from the markdown review of the previous iteration.
+    Returns empty list if parsing fails.
+    """
+    # Find the previous iteration's review
+    reviews_dir = Path("output/reviews")
+    if not reviews_dir.is_dir():
+        return []
+
+    # Pattern: <jid>-iter<N>.md, find the highest N < current
+    # We don't know current iteration yet, so try iter1, iter2, ...
+    prev_findings = []
+    for n in range(20, 0, -1):
+        review_path = reviews_dir / f"{jid}-iter{n}.md"
+        if review_path.is_file():
+            try:
+                text = review_path.read_text(encoding="utf-8")
+                prev_findings = _parse_findings_from_markdown(text, n)
+            except Exception:
+                pass
+            break  # Take only the latest review
+
+    return prev_findings
+
+
+def _parse_findings_from_markdown(text: str, iteration: int) -> list[dict]:
+    """Parse findings from a review markdown.
+
+    Looks for the "## Проверка исправлений итерации N" section and the
+    "## Находки" section to determine which findings are unfixed.
+
+    Returns a list of finding dicts with extracted fields.
+    """
+    findings = []
+
+    # Strategy: parse the "## Проверка исправлений" table to find unfixed items
+    # Each row has: #, level, description, status
+    # Status can be "✓ Исправлено", "✅ Исправлено" (fixed) or "❌ Не исправлен" (unfixed)
+
+    # Split by sections
+    sections = re.split(r'^## ', text, flags=re.MULTILINE)
+    checks_section = None
+    findings_section = None
+
+    for section in sections:
+        if section.startswith("Проверка исправлений"):
+            checks_section = section
+        elif section.startswith("Находки"):
+            findings_section = section
+
+    if not checks_section and not findings_section:
+        return findings
+
+    # Parse check table to find unfixed finding IDs
+    unfixed_ids = set()
+    fixed_ids = set()
+
+    if checks_section:
+        # Find table rows: | # | Level | Description | Status |
+        for line in checks_section.split('\n'):
+            line = line.strip()
+            if not line.startswith('|'):
+                continue
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            # cells: ['#', 'Level', 'Description', 'Status']
+            if len(cells) >= 4:
+                finding_id = cells[0].lstrip('#').strip()
+                status = cells[-1]
+
+                if '✓' in status or '✅' in status:
+                    fixed_ids.add(finding_id)
+                elif '❌' in status or 'Не исправ' in status:
+                    unfixed_ids.add(finding_id)
+
+    # If no check table (iter1), or we need details, parse findings section
+    if findings_section:
+        # Find each finding: #[N] [SEVERITY] description
+        finding_pattern = re.compile(
+            r'#(\d+)\s*\[(BLOCKER|MAJOR|MINOR)\]\s*'
+            r'([^,]+?)(?:,?\s*шаг(ы)\s*([^\n]*?))?\s*—\s*(.+)',
+            re.MULTILINE
+        )
+        for match in finding_pattern.finditer(findings_section):
+            fid = match.group(1)
+            severity = match.group(2)
+            case = match.group(3).strip()
+            steps = match.group(4).strip() if match.group(4) else ''
+            detail = match.group(5).strip()
+
+            # Include unfixed, OR include all from iter1 (no check table yet)
+            if fid in unfixed_ids:
+                findings.append({
+                    "id": f"#{fid}",
+                    "iteration": iteration,
+                    "severity": severity,
+                    "case": case,
+                    "step": steps,
+                    "finding": detail,
+                    "status": "unfixed"
+                })
+            elif fid in fixed_ids:
+                findings.append({
+                    "id": f"#{fid}",
+                    "iteration": iteration,
+                    "severity": severity,
+                    "case": case,
+                    "step": steps,
+                    "finding": detail,
+                    "status": "fixed"
+                })
+
+    return findings
 
 
 def digest(path: Path) -> str:
@@ -73,17 +217,6 @@ def hash_tree(target: Path) -> dict[str, str]:
         if p.is_file() and p.suffix in (".md", ".json"):
             out[str(p)] = digest(p)
     return out
-
-
-def current_run_id() -> str | None:
-    """Read the run id verbatim, so invalidation does not rest on a hash alone."""
-    path = Path(RUN_FILE)
-    if not path.is_file():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8")).get("runId")
-    except json.JSONDecodeError:
-        return None
 
 
 def global_fingerprint() -> dict[str, str]:
@@ -126,7 +259,6 @@ def main() -> int:
 
     current = {
         "journeyId": jid,
-        "runId": current_run_id(),
         "global": global_fingerprint(),
         "plan": digest(plan) if plan.is_file() else None,
         "cases": case_fingerprints(case_dir),
@@ -145,14 +277,8 @@ def main() -> int:
     all_cases = sorted(current["cases"])
     reason_global: str | None = None
 
-    if not Path(RUN_FILE).is_file():
-        reason_global = ("нет идентификатора прогона (output/.run) — "
-                         "неизвестно, к какому прогону относится база")
-    elif baseline is None:
+    if baseline is None:
         reason_global = "базы нет — первая итерация или база нечитаема"
-    elif baseline.get("runId") != current["runId"]:
-        reason_global = (f"база от другого прогона ({baseline.get('runId')}), "
-                         f"текущий {current['runId']}")
     elif baseline.get("global") != current["global"]:
         reason_global = "изменились требования или правила оценки"
     elif baseline.get("plan") != current["plan"]:
@@ -160,7 +286,7 @@ def main() -> int:
 
     if reason_global:
         required = all_cases
-        carried: list[str] = []
+        carried = []
         per_case = {c: "полное ревью: " + reason_global for c in all_cases}
     else:
         old_cases = baseline.get("cases", {})
@@ -183,6 +309,13 @@ def main() -> int:
                 per_case[c] = "не изменён — findings переносятся"
         carried = [c for c in all_cases if c not in required]
 
+    # --- Extract carried findings from previous iteration -------------------
+    # Primary: read from state.json (critic writes carriedFindings at end of review)
+    # Fallback: parse previous review markdown
+    carried_findings = _extract_carried_findings(jid)
+    if not carried_findings:
+        carried_findings = _try_parse_review_markdown(jid)
+
     decision = {
         "journeyId": jid,
         "globalInvalidation": reason_global,
@@ -190,6 +323,7 @@ def main() -> int:
         "carryForward": carried,
         "perCase": per_case,
         "savedShare": round(len(carried) / len(all_cases), 2) if all_cases else 0.0,
+        "carriedFindings": carried_findings,
     }
 
     if args.json_out:

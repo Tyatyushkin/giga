@@ -94,32 +94,21 @@ you rather than absorbed:
 - **After the loops** you get what the run could not settle — requirements no case checks, questions
   still open, journeys needing a human — and can answer and re-run just those journeys.
 
-`--yes` skips only the go/no-go pause. `--no-ask` makes the run fully autonomous and accumulates
-every question it would have asked in `output/pending.md`; the final phase folds that file into
-`output/report.md` under «Требуются решения человека».
+`--yes` skips only the go/no-go pause. `--no-ask` makes the run fully autonomous and dumps every
+question it would have asked into `output/report.md` under «Требуются решения человека».
 
 ## Layout
 
 ```
-.gigacode/agents/       requirements-analyst.md, qa-designer.md, test-critic.md,
-                        pytest-stub-writer.md, browser-test-writer.md
-.gigacode/commands/e2e/ run.md, analyze.md, design.md, review.md, status.md
-.gigacode/skills/       human-gate.md, subagent-briefing.md, requirements-gate.md,
-                        journey-pipeline.md, pytest-generation.md — procedures shared by
-                        several commands, inlined with
-                        `!{python3 scripts/include_skill.py <name> --level N}`
-conftest.py             registers the J<NN> journey markers from output/tests/ dirs
-GIGACODE.md             project context loaded into every session
-docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
-templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
-input/requirements/     your source requirements (sample «Звук» included) + _answers.md
-output/                 suites/, cases/, reviews/, tests/, state/<journey>.json, state.json,
-                        report.md, pending.md (skipped questions), .run (run identity),
-                        .previous/ (last run's artefacts)
-scripts/                validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
-                        build_gate_questions.py, gate_check.py, include_skill.py,
-                        start_run.py, check_artifacts.py, validate_plans.py
-examples/               a fully worked journey plan + case, useful as a reference and smoke test
+.gigacode/agents/         requirements-analyst.md, qa-designer.md, test-critic.md
+.gigacode/commands/e2e/   run.md, analyze.md, design.md, review.md, status.md
+GIGACODE.md               project context loaded into every session
+docs/                 format.md, quality-criteria.md, critic-rubric.md, examples.md
+templates/            suite-plan.md, test-case.md, test-case.json, review-report.md
+input/requirements/   your source requirements (sample «Звук» included) + _answers.md when you answer
+output/               suites/, cases/, reviews/, state/<journey>.json, state.json, report.md
+scripts/              validate_cases.py — deterministic linter
+examples/             a fully worked journey plan + case, useful as a reference and smoke test
 ```
 
 ## The linter

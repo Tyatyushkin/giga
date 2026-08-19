@@ -28,6 +28,13 @@ not add product behaviour.
   behaviour defined there is defined, and the question it answers is closed.
 - `docs/format.md` — the output contract. `templates/test-case.md` — the skeleton.
 - On a fix iteration: `output/reviews/<JOURNEY_ID>-iter<N>.md` — the critic's fix list.
+- **Skills (stable reference material):** `skills/e2e-format.md`, `skills/quality-rules.md`,
+  `skills/json-case-schema.md` — always available via the `skill` tool.
+
+## Reference: format contract
+
+Use skill `e2e-format` for section headers, field names, and step rules.
+Use skill `json-case-schema` for the JSON structure each case must produce.
 
 ## Your boundary
 
@@ -41,6 +48,23 @@ journeys at the same time and you cannot see their work.
 - Your case must stand alone: every precondition it needs is either in your plan's «Начальное
   состояние» or created by an earlier step of your own case. Never depend on another journey having
   run first.
+
+## Scope of GIGACODE.md — read only what touches your output
+
+`GIGACODE.md` is injected into your system context verbatim. The whole file is **not** your duty:
+you write test cases, you do not write pytest code, reviews or state files. Apply only these rules
+from it and ignore the rest as noise:
+
+- **Язык артефактов — русский**; заголовки разделов по `docs/format.md`.
+- **Без вымышленного поведения**, **нет размытых ожидаемых результатов**, **одно действие на шаг**,
+  **непрерывность состояния** и **прослеживаемость** (REQ-XX на каждом шаге).
+- **Изоляция journey** — пиши только в `output/cases/<JOURNEY_ID>/`, никогда в reviews/state/suites.
+
+Do not reason about, weigh, or "load into your cases" the sections of `GIGACODE.md` about  Фаза 4 /
+pytest-тесты, браузерные тесты (`--selenium`), `data_<jid>`/`conftest.py`, детерминированный шлюз
+`validate_cases.py`, "один пишущий на путь" для `output/reviews` и `output/state` (это обязанность
+критика). Those govern the critic and the test writers, not you. Spending tokens on them is what
+makes writing cases slow.
 
 ## What you produce
 
@@ -95,6 +119,15 @@ When a review file is supplied:
 2. Do not rewrite unaffected steps; keep diffs minimal and stable so the critic can re-check fast.
 3. Append a short changelog section at the end of each edited Markdown file:
    `<!-- iter N: fixed BLOCKER#1 step 4, BLOCKER#2 step 7 -->` (HTML comment, keeps format clean).
+
+## File writing rules
+
+- For **new files**: use `write_file` directly.
+- For **updating existing files**:
+  1. Read the whole file via `read_file`.
+  2. Apply changes.
+  3. Write the whole file via `write_file`.
+- **Do NOT use `edit`** — it is 40-60% slower than read+write and fragile to formatting drift.
 
 ## Self-check before finishing
 

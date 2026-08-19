@@ -15,10 +15,13 @@ Cases currently on disk:
 
 !{find output/cases -name '*.md' 2>/dev/null | sort || echo "NO CASES — run /e2e:design first"}
 
-Build each prompt by the briefing protocol below — row `test-critic`. From iteration 2 on,
-add the `review_scope.py` wording verbatim.
-
-!{python3 scripts/include_skill.py subagent-briefing --level 2}
+Prompt each subagent with:
+- its case directory, its suite plan path, the requirement file paths
+  (including `input/requirements/_answers.md` if present — answers there rank as requirements)
+- `docs/critic-rubric.md`, `docs/quality-criteria.md`, `docs/format.md`
+- the review output path `output/reviews/<JOURNEY_ID>-iter<N>.md`
+- the state output path `output/state/<JOURNEY_ID>.json`, and "never write `output/state.json`"
+- the instruction to run `scripts/validate_cases.py` first and merge its findings
 
 When they finish, print each verdict line and blocker list verbatim, then one summary line per
 journey: `J01 iter2: BLOCKER 1, MAJOR 3, MINOR 2`. If any verdict is FIX_REQUIRED, give me the exact
@@ -27,7 +30,3 @@ journey: `J01 iter2: BLOCKER 1, MAJOR 3, MINOR 2`. If any verdict is FIX_REQUIRE
 Finally, list the requirements the critics found unchecked and the questions still open, per journey.
 Do not bury them in the review file: if coverage is incomplete, say which `REQ-XX` and ask me whether
 to answer the blocking questions now or accept the gap.
-
-Ask via the question protocol below — mode B, you compose the options yourself:
-
-!{python3 scripts/include_skill.py human-gate --level 2}

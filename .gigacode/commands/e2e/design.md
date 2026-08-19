@@ -20,18 +20,18 @@ Existing reviews:
 
 !{ls -1 output/reviews/ 2>/dev/null || echo "no reviews yet"}
 
-Build each prompt by the briefing protocol below — row `qa-designer`. If a review path was
-given, it is a fix iteration: use the fix-iteration wording verbatim.
-
-!{python3 scripts/include_skill.py subagent-briefing --level 2}
+Prompt each subagent with:
+- the suite plan path for its journey
+- the requirement file paths (source of truth), including `input/requirements/_answers.md` if present
+- `docs/format.md` and `templates/test-case.md`
+- the output directory `output/cases/<JOURNEY_ID>/`
+- the boundary line: "you own `<JOURNEY_ID>` only; do not read or write any other journey's directory"
+- if a review path was given: "fix iteration, address every BLOCKER, keep diffs minimal"
 
 When they finish, report per journey: files written, step count of the main case, number of variants,
 gaps and questions raised, and the linter result.
 
 Then list the gaps and questions the designers raised while writing steps — these are new, the
 analyst did not have them — and ask me whether to answer them now (into
-`input/requirements/_answers.md`) or carry them into the review as declared gaps.
-
-Ask via the question protocol below — mode B, you compose the options yourself:
-
-!{python3 scripts/include_skill.py human-gate --level 2}
+`input/requirements/_answers.md`) or carry them into the review as declared gaps. Use the interactive
+question tool your runtime exposes; if there is none, print the options and stop your turn.
