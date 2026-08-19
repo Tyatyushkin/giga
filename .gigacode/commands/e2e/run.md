@@ -106,56 +106,6 @@ python3 scripts/start_run.py
 
 !{python3 scripts/include_skill.py journey-pipeline --level 4}
 
-**W2: после каждой волны дизайнеров** запускайте постпроцессор для каждого активного journey,
-чтобы регенерировать JSON-файлы из MD:
-
-```
-python3 scripts/md_to_case_json.py output/cases/<JOURNEY_DIR>
-```
-
-Это устраняет необходимость писать JSON самим дизайнерам (экономия ~25% выходных токенов).
-
-**W5: критик использует** `scripts/cached_validate.py` вместо `validate_cases.py` напрямую —
-кэш переиспользует JSON-отчёт линтера между итерациями, экономя 1 turn критика.
-
-**Шаблон промпта дизайнера** (каждая волна):
-
-```
-You own journey <JOURNEY_ID>. Read these in order:
-
-1. output/suites/<JOURNEY_ID>.md — the journey plan.
-2. output/suites/<JOURNEY_ID>-context.json — minimal context (REQ/gaps/questions for THIS journey).
-3. input/requirements/*.md and input/requirements/_answers.md if it exists.
-4. docs/format.md and templates/test-case.md.
-5. output/reviews/<JOURNEY_ID>-iter<N>.md on fix iterations only.
-
-Write ONLY Markdown cases into output/cases/<JOURNEY_DIR>/
-(orchestrator regenerates *.json via scripts/md_to_case_json.py — do NOT write JSON).
-
-At the end run:
-   python3 scripts/validate_cases.py output/cases/<JOURNEY_DIR>
-
-to confirm no BLOCKER. Return: files written, step counts, gaps, questions, lint status.
-```
-
-**Шаблон промпта критика** (каждая волна):
-
-```
-You review journey <JOURNEY_ID>. Read these:
-
-1. output/suites/<JOURNEY_ID>.md — scope contract.
-2. output/suites/<JOURNEY_ID>-context.json — minimal context (your REQ only).
-3. output/cases/<JOURNEY_DIR>/*.md — the artefacts.
-4. output/reviews/<JOURNEY_ID>-iter<N-1>.md — the previous review if iteration > 1.
-5. docs/critic-rubric.md, docs/quality-criteria.md, docs/format.md.
-
-Run:
-   python3 scripts/cached_validate.py output/cases/<JOURNEY_DIR> --json output/reviews/<JOURNEY_ID>-lint.json
-
-Write output/reviews/<JOURNEY_ID>-iter<N>.md and output/state/<JOURNEY_ID>.json.
-Do not write output/state.json — the orchestrator owns it.
-```
-
 ### Фаза 2.5 — Генерация pytest-тестов (опционально, спрашивает человек)
 
 Выполняется только когда Фаза 2 полностью завершена: все journey — `PASS` или `NEEDS_HUMAN`,

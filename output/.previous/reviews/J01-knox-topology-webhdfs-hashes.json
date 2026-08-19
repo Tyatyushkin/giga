@@ -1,0 +1,20 @@
+{
+  "journeyId": "J01-knox-topology-webhdfs",
+  "runId": "20260819T115235-7abd13",
+  "global": {
+    "output/.run": "d44528dca24e76ec",
+    "input/requirements/_answers.md": "0b7b2b1850e8fd19",
+    "input/requirements/zvuk-sample.md": "63841bb3835a8867",
+    "input/requirements/zvuk.md": "9b716b7d3f878a0c",
+    "docs/critic-rubric.md": "d344ee24f5c03c2a",
+    "docs/quality-criteria.md": "fd9eb9ad0f9b8ae2",
+    "docs/format.md": "10147df13ea81d33"
+  },
+  "plan": "e89c777ca2228c37",
+  "cases": {
+    "TC-J01-00": "cf5cc3d1af29cd65",
+    "TC-J01-01": "b09cd71bd11498d0",
+    "TC-J01-02": "7cae92aa28c39f9d",
+    "TC-J01-03": "9b415860bb590882"
+  }
+}

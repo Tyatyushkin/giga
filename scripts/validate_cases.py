@@ -488,9 +488,10 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
     # --- markdown / json parity -----------------------------------------
     json_path = path.with_suffix(".json")
     if not json_path.exists():
-        add("MAJOR", "json-missing", str(json_path.name),
-            "Нет JSON-версии кейса",
-            "Запустить python3 scripts/build_case_json.py на каталоге кейса")
+        add("BLOCKER", "json-missing", str(json_path.name),
+            "Нет JSON-версии кейса — а JSON первичен, значит этот Markdown написан руками "
+            "и не порождён из источника",
+            "Написать кейс в `.json` и породить Markdown: python3 scripts/json_to_md.py")
     else:
         try:
             data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -501,11 +502,11 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
             if data.get("id", "") != case_id:
                 add("BLOCKER", "json-id-mismatch", str(json_path.name),
                     f"ID в JSON ('{data.get('id')}') не совпадает с Markdown ('{case_id}')",
-                    "Перегенерировать: python3 scripts/build_case_json.py на каталоге кейса")
+                    "Перегенерировать: python3 scripts/json_to_md.py на JSON кейса")
             if len(data.get("steps", [])) != len(step_rows):
                 add("BLOCKER", "json-steps-mismatch", str(json_path.name),
                     f"Шагов в JSON {len(data.get('steps', []))}, в Markdown {len(step_rows)}",
-                    "Перегенерировать: python3 scripts/build_case_json.py на каталоге кейса")
+                    "Перегенерировать: python3 scripts/json_to_md.py на JSON кейса")
             else:
                 # Same count is necessary, not sufficient: the id/count checks pass while
                 # a step's wording silently diverges, and downstream the JSON is what the
@@ -526,8 +527,8 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                                 f"{json_path.name} / шаг {idx}",
                                 f"{label} в JSON расходится с Markdown: "
                                 f"«{js_val[:60]}» ≠ «{md_val[:60]}»",
-                                "Перегенерировать: python3 scripts/build_case_json.py "
-                                "на каталоге кейса")
+                                "Перегенерировать: python3 scripts/json_to_md.py "
+                                "на JSON кейса")
                             break  # одного расхождения на шаг достаточно
 
 
@@ -537,6 +538,22 @@ def collect(target: Path) -> list[Path]:
     return sorted(
         p for p in target.rglob("*.md")
         if not p.name.startswith("_") and "review" not in p.name.lower()
+    )
+
+
+def orphan_json(target: Path) -> list[Path]:
+    """JSON cases with no Markdown sibling.
+
+    The linter walks `.md`, so a case whose Markdown was never generated is not merely
+    unchecked — it is invisible, and an invisible case reads exactly like a clean one.
+    Since JSON became the primary format, this is the likeliest way for a case to skip
+    every rule in this file.
+    """
+    if target.is_file():
+        return []
+    return sorted(
+        p for p in target.rglob("TC-*.json")
+        if not p.with_suffix(".md").exists()
     )
 
 
@@ -579,7 +596,8 @@ def main() -> int:
         return 2
 
     files = collect(target)
-    if not files:
+    orphans = orphan_json(target)
+    if not files and not orphans:
         print(f"validate_cases: no .md cases under {target}", file=sys.stderr)
         return 2
 
@@ -589,6 +607,13 @@ def main() -> int:
             VALID_REQ_IDS = load_req_ids(index_path)
 
     findings: list[Finding] = []
+    for orphan in orphans:
+        findings.append(Finding(
+            "BLOCKER", "md-missing", str(orphan),
+            "Markdown", "JSON есть, Markdown нет — кейс не попадает ни в одну проверку "
+            "этого линтера и не виден человеку на шлюзе",
+            "Породить Markdown: python3 scripts/json_to_md.py " + str(orphan)))
+
     unmeasured: set[str] = set()
     for f in files:
         plan = plan_for(f, args.plan)

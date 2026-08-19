@@ -114,6 +114,68 @@ def corpus_inputs() -> list[str]:
     return [str(s) for s in sources if isinstance(s, str) and s]
 
 
+# --- carried findings extraction -------------------------------------------
+
+def _extract_carried_findings(jid: str) -> list[dict]:
+    """Extract unfixed findings from the previous state.json.
+
+    Reads output/state/<JID>.json, finds the previous iteration's state,
+    extracts carriedFindings with status "unfixed", and returns them.
+    Returns empty list if no previous state exists or is unreadable.
+    """
+    state_path = Path(f"output/state/{jid}.json")
+    if not state_path.is_file():
+        return []
+
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    # We need the PREVIOUS iteration's state. Since the current state may
+    # already have been written by the critic on this run, we look for the
+    # review path and check if there's an older state.
+    # In practice, on iteration 2+ the state.json already has carriedFindings
+    # from the previous iteration (written by the critic at the end of iter N-1).
+    # We just need to filter out items that were "fixed".
+
+    prev_carried = state.get("carriedFindings", [])
+    if not prev_carried:
+        return []
+
+    # Filter: keep only unfixed items (fixed items were resolved by qa-designer)
+    unfixed = [f for f in prev_carried if f.get("status") == "unfixed"]
+    return unfixed
+
+
+def _try_parse_review_markdown(jid: str) -> list[dict]:
+    """Fallback: parse the previous review markdown for unfixed findings.
+
+    If state.json doesn't have carriedFindings yet (legacy format),
+    try to extract from the markdown review of the previous iteration.
+    Returns empty list if parsing fails.
+    """
+    # Find the previous iteration's review
+    reviews_dir = Path("output/reviews")
+    if not reviews_dir.is_dir():
+        return []
+
+    # Pattern: <jid>-iter<N>.md, find the highest N < current
+    # We don't know current iteration yet, so try iter1, iter2, ...
+    prev_findings = []
+    for n in range(20, 0, -1):
+        review_path = reviews_dir / f"{jid}-iter{n}.md"
+        if review_path.is_file():
+            try:
+                text = review_path.read_text(encoding="utf-8")
+                prev_findings = _parse_findings_from_markdown(text, n)
+            except Exception:
+                pass
+            break  # Take only the latest review
+
+    return prev_findings
+
+
 def global_fingerprint() -> dict[str, str]:
     fp: dict[str, str] = {}
     for entry in GLOBAL_INPUTS + corpus_inputs():
@@ -211,11 +273,17 @@ def main() -> int:
                 per_case[c] = "не изменён — findings переносятся"
         carried = [c for c in all_cases if c not in required]
 
+    # Findings, вытащенные из прошлой итерации: их обязан перепечатать критик.
+    # Список здесь, а не только в шаблоне отчёта, чтобы «перенесено» было данными,
+    # а не обещанием — иначе суженное ревью теряет находки молча.
+    carried_findings = _extract_carried_findings(jid) or _try_parse_review_markdown(jid)
+
     decision = {
         "journeyId": jid,
         "globalInvalidation": reason_global,
         "reviewRequired": required,
         "carryForward": carried,
+        "carriedFindings": carried_findings,
         "perCase": per_case,
         "savedShare": round(len(carried) / len(all_cases), 2) if all_cases else 0.0,
     }

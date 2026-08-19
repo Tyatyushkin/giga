@@ -48,13 +48,8 @@ by other critics at the same time, and you cannot see their work.
 ### 1. Deterministic gate
 
 ```bash
-python3 scripts/cached_validate.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
+python3 scripts/validate_cases.py output/cases/<JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-lint.json
 ```
-
-W5: этот врапер хэширует все `.md`/`.json` и переиспользует прошлый JSON-отчёт, если
-ничего не изменилось — экономит один turn на каждой итерации после первой. Если
-кэш показывает «fresh», запускается полный `validate_cases.py`. **Никогда не
-вызывай `validate_cases.py` напрямую** — всегда через `cached_validate.py`.
 
 Merge linter findings into your report, keeping their severity. Never contradict the linter on
 structural facts (missing sections, placeholders, broken numbering).
@@ -67,6 +62,9 @@ and lose the structural floor.
 ```bash
 python3 scripts/review_scope.py --journey <JOURNEY_ID> --json output/reviews/<JOURNEY_ID>-scope.json
 ```
+
+**Run the linter and `review_scope.py` as parallel tool calls, not one after the other.**
+Neither reads the other's output.
 
 On iteration 1 it returns «полное ревью» and you proceed as normal — passes 2–5 run over every case.
 
