@@ -502,6 +502,49 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
             expected = conv.json_to_md(json.loads(json_path.read_text(encoding="utf-8")))
         except Exception:
             expected = None
+        # --- пошаговая трассируемость ------------------------------------
+        # Единственное поле, которое и решило сделать JSON первичным: из Markdown
+        # его не восстановить. До этих правил его никто не читал, и заполнение
+        # было актом веры — а незачитываемое поле неизбежно расходится с истиной.
+        try:
+            case_json = json.loads(json_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            case_json = None
+        if isinstance(case_json, dict):
+            case_reqs = [r for r in case_json.get("requirements", []) if isinstance(r, str)]
+            step_reqs: dict[str, list[int]] = {}
+            for i, st in enumerate(case_json.get("steps", []), start=1):
+                if not isinstance(st, dict):
+                    continue
+                for r in st.get("requirements", []) or []:
+                    if isinstance(r, str) and r.strip():
+                        step_reqs.setdefault(r.strip(), []).append(i)
+
+            if VALID_REQ_IDS is not None:
+                unknown = sorted(r for r in step_reqs if r not in VALID_REQ_IDS)
+                if unknown:
+                    add("BLOCKER", "step-req-unknown", f"{json_path.name} / steps[].requirements",
+                        f"ID не найден(ы) в индексе требований: {', '.join(unknown)}",
+                        "Сверить с output/suites/_index.json — опечатка или выдуманный якорь")
+
+            if case_reqs and step_reqs:
+                stray = sorted(r for r in step_reqs if r not in case_reqs)
+                if stray:
+                    add("MAJOR", "step-req-outside-case",
+                        f"{json_path.name} / steps[].requirements",
+                        f"Шаги ссылаются на требования вне «Покрываемые требования» кейса: "
+                        f"{', '.join(stray)}",
+                        "Либо добавить их в requirements кейса, либо убрать из шагов — "
+                        "кейс обязан объявлять всё, что проверяет")
+                unexercised = sorted(r for r in case_reqs if r not in step_reqs)
+                if unexercised:
+                    add("MAJOR", "req-not-exercised",
+                        f"{json_path.name} / requirements",
+                        f"Кейс объявляет требования, которых не проверяет ни один шаг: "
+                        f"{', '.join(unexercised)}",
+                        "Либо привязать их к шагам через steps[].requirements, либо убрать "
+                        "из requirements — иначе кейс заявляет покрытие, которого не даёт")
+
         if expected is not None and expected != text:
             add("BLOCKER", "md-stale", str(path.name),
                 "Markdown не совпадает с тем, что даёт конвертер из JSON — "

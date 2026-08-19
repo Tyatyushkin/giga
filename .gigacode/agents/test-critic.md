@@ -114,6 +114,15 @@ case already declares it in `## Выявленные пробелы`.
 Then invert: for each `REQ-XX` in scope of this journey, find the step that checks it.
 Unchecked requirements in scope are MAJOR (coverage loss), not BLOCKER.
 
+The designer already wrote this mapping down: `steps[].requirements` in the case JSON anchors
+each step to the requirements it exercises. Markdown carries no such column, so the field exists
+only there — read it, and compare it against the map you derived rather than retyping the work.
+Where the two disagree, the disagreement is itself the finding: either a step claims a
+requirement it does not check, or it checks one it does not claim. The linter already enforces
+the mechanical half (ids exist, steps stay inside the case's declared set, every declared
+requirement is exercised by some step), so what is left for you is the half that needs reading —
+whether the step really tests what it names.
+
 ### 3. Chain pass
 
 Walk the main case as a state machine. For each step ask: is the state this step needs created by an
