@@ -1,19 +1,18 @@
 {
   "journeyId": "J01-knox-topology-lifecycle",
-  "runId": "20260819T121604-e43c08",
+  "runId": "20260819T171951-5e5f91",
   "global": {
-    "output/.run": "f7b7d3e86b4a3a46",
-    "input/requirements/_answers.md": "0b7b2b1850e8fd19",
-    "input/requirements/zvuk-sample.md": "63841bb3835a8867",
-    "input/requirements/zvuk.md": "9b716b7d3f878a0c",
-    "docs/critic-rubric.md": "d344ee24f5c03c2a",
+    "output/.run": "b9ca7c429e2d7654",
+    "docs/critic-rubric.md": "c976d583ca028895",
     "docs/quality-criteria.md": "fd9eb9ad0f9b8ae2",
-    "docs/format.md": "10147df13ea81d33"
+    "docs/format.md": "c97b7040bd8548d3",
+    "input/requirements-knox/knox-demo.md": "387532e2b20fb101"
   },
-  "plan": "274d0b0766444081",
+  "plan": "cc955debfe5dd7eb",
   "cases": {
-    "TC-J01-00": "4dac6dc6763a8d79",
-    "TC-J01-01": "231e5ee9741eb796",
-    "TC-J01-02": "389e72b07efc6b47"
+    "TC-J01-00": "2d65b8b79c94b5d9",
+    "TC-J01-01": "7615640946604c27",
+    "TC-J01-02": "e5abaf804eb8ed1a",
+    "TC-J01-03": "16c69f9cac996dfd"
   }
 }

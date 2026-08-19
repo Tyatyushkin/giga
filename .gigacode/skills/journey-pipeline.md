@@ -56,8 +56,16 @@ python3 scripts/check_state.py --state output/state/<J>.json --expect-iteration 
 Каждый journey идёт по своей цепочке независимо от остальных:
 
 ```
-agent(qa-designer) → check_artifacts → agent(test-critic) → check_state → решение
+контекст journey → agent(qa-designer) → check_artifacts → agent(test-critic) → check_state → решение
 
+0. ОДИН РАЗ перед первым батчем постройте контекст каждого journey из списка работ:
+     python3 scripts/extract_journey_context.py <JOURNEY_ID>
+   Он пишет `output/suites/<JOURNEY_ID>-context.json` — только требования, пробелы и вопросы
+   этого journey. Спеки дизайнера и критика предписывают читать его вместо полного
+   `_index.json`, поэтому без этого шага оба агента ищут файл, которого нет, и читают
+   весь индекс — включая чужие journey.
+   Ненулевой код или строка про «ни один не отнесён к» на stderr означает, что поле `journey`
+   в индексе не совпало с id: контекст выйдет пустым, и агент останется без пробелов.
 1. запускайте всех дизайнеров активного батча в ОДНОМ СООБЩЕНИИ — они идут параллельно.
    Никогда не отправляйте их по одному.
 2. когда вернулся дизайнер конкретного journey — сначала проверьте, что он произвёл всё

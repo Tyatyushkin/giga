@@ -2,7 +2,8 @@
   "checkedFiles": [
     "output/cases/J01-knox-topology-lifecycle/TC-J01-00.md",
     "output/cases/J01-knox-topology-lifecycle/TC-J01-01.md",
-    "output/cases/J01-knox-topology-lifecycle/TC-J01-02.md"
+    "output/cases/J01-knox-topology-lifecycle/TC-J01-02.md",
+    "output/cases/J01-knox-topology-lifecycle/TC-J01-03.md"
   ],
   "counts": {
     "BLOCKER": 0,
