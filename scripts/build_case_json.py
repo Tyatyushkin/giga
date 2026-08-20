@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 """Deterministic Markdown -> JSON converter for e2e test cases.
 
+ВНИМАНИЕ: с прогона 10 первичным форматом стал JSON, и кейсы порождаются в другую
+сторону — `scripts/json_to_md.py`. Этот скрипт остался как **путь миграции**: им
+поднимают рукописный Markdown, написанный до разворота, в JSON, после чего Markdown
+перегенерируют. Так мигрирован эталон в `examples/`. В конвейере он не вызывается,
+и дизайнер его не запускает.
+
+Одно ограничение миграции: `steps[].requirements` из Markdown не восстанавливается
+(колонки с якорями в таблице шагов нет), поэтому скрипт пишет туда `[]` — якоря
+переносят из прежнего JSON отдельно.
+
+
 qa-designer used to hand-write both `.md` and `.json` for every case: same content,
 typed twice, at full sequential-output-token cost each time (docs/format.md has always
 required them to be "содержательно идентичны" — the LLM was doing a copy, not writing

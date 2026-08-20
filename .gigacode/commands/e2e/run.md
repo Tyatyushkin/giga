@@ -33,10 +33,12 @@ description: Полный цикл — аналитик → N параллель
 
 !{python3 scripts/include_skill.py human-gate --level 3}
 
-Инструменты — если ниже названа хоть одна недостающая строка, остановитесь и скажите мне об этом:
-дальше шлюзы просто не сработают.
+Инструменты — если ниже названа хоть одна строка «НЕТ …», остановитесь и скажите мне об этом:
+дальше шлюзы просто не сработают. Строки в скобках — не ошибка: это скрипты, которые лежат
+в дереве, но процедурой не вызываются. Их видно намеренно, иначе список требуемых отстаёт
+от репозитория молча — так и вышло после слияния четырёх веток.
 
-!{for s in start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill; do [ -f "scripts/$s.py" ] || echo "НЕТ scripts/$s.py"; done; echo "проверено 10 скриптов"}
+!{n=0; for s in start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill json_to_md extract_journey_context patch_case; do n=$((n+1)); [ -f "scripts/$s.py" ] || echo "НЕТ scripts/$s.py"; done; echo "проверено $n скриптов процедуры"; req=" start_run extract_reqs build_gate_questions gate_check check_artifacts check_state review_scope validate_cases validate_plans include_skill json_to_md extract_journey_context patch_case "; for f in scripts/*.py; do b=`basename "$f" .py`; case "$req" in *" $b "*) ;; *) echo "  (лежит в дереве, процедурой не вызывается: $b)";; esac; done}
 
 Все проверки этой процедуры — скрипты, и решение принимается по **коду выхода**, а не по тексту
 вывода. Код, не названный в таблице своей фазы, считается отказом: проверка, которая не
