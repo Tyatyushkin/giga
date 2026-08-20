@@ -11,7 +11,7 @@ tools:
 modelConfig:
   temperature: 0.1
 runConfig:
-  max_turns: 30
+  max_turns: 45  # замер 18.08: 11 сессий, максимум 24 хода — 80 % прежнего лимита 30
 color: red
 ---
 

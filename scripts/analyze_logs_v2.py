@@ -32,44 +32,54 @@ def load_logs(logs_dir=DEFAULT_LOGS_DIR):
 
 
 def extract_agent_type(log):
-    """Определяет тип агента по системному промпту."""
-    messages = log.get('request', {}).get('messages', [])
+    """Тип агента по первой строке системного промпта.
+
+    Раньше классификация шла подстроками по всему тексту, и проверка «test case»
+    стояла раньше проверок на имена агентов. Системный промпт самого GigaCode CLI
+    содержит и «test case», и имена всех агентов (он их перечисляет), поэтому
+    все 617 запросов настоящего лога были отнесены к qa-designer — 100 % в одну
+    корзину. Первая строка спеки однозначна: `# QA Test Designer`, `# Test Critic`.
+    """
+    messages = (log.get('request') or {}).get('messages') or []
+    head = ''
     for msg in messages:
         if msg.get('role') == 'system':
-            content = msg.get('content', '')
-            if 'qa-designer' in content.lower() or 'test case' in content.lower():
-                return 'qa-designer'
-            elif 'test-critic' in content.lower() or 'review' in content.lower():
-                return 'test-critic'
-            elif 'requirements-analyst' in content.lower():
-                return 'requirements-analyst'
-            elif 'pytest-stub-writer' in content.lower() or 'pytest' in content.lower():
-                return 'pytest-writer'
-            elif 'orchestrat' in content.lower():
-                return 'orchestrator'
-            elif 'critic' in content.lower():
-                return 'test-critic'
-    # По инструментальным вызовам
-    response = log.get('response', {}).get('choices', [{}])[0].get('message', {})
-    tool_calls = response.get('tool_calls', [])
-    for tc in tool_calls:
-        func = tc.get('function', {})
-        name = func.get('name', '')
-        args = func.get('arguments', '')
-        if name == 'agent':
-            try:
-                args_dict = json.loads(args) if isinstance(args, str) else args
-                sub = args_dict.get('subagent_type', '')
-                if sub:
-                    return sub
-            except:
-                pass
-    return 'unknown'
+            content = msg.get('content') or ''
+            lines = [l for l in content.strip().splitlines() if l.strip()]
+            head = lines[0].strip() if lines else ''
+            break
+    if not head:
+        return 'unknown'
 
+    low = head.lower()
+    if low.startswith('#'):
+        title = low.lstrip('# ').strip()
+        for needle, name in (
+            ('qa test designer', 'qa-designer'),
+            ('designer', 'qa-designer'),
+            ('test critic', 'test-critic'),
+            ('critic', 'test-critic'),
+            ('requirements analyst', 'requirements-analyst'),
+            ('analyst', 'requirements-analyst'),
+            ('pytest', 'pytest-stub-writer'),
+            ('browser', 'browser-test-writer'),
+        ):
+            if needle in title:
+                return name
+        return f'agent:{title[:40]}'
+
+    if 'gigacode' in low:
+        return 'orchestrator (GigaCode CLI)'
+    if 'general-purpose' in low:
+        return 'general-purpose'
+    if 'file search' in low:
+        return 'file-search'
+    return 'unknown'
 
 def extract_tool_calls(log):
     """Извлекает инструменты из ответа."""
-    response = log.get('response', {}).get('choices', [{}])[0].get('message', {})
+    choices = (log.get('response') or {}).get('choices') or [{}]
+    response = (choices[0] or {}).get('message') or {}
     tool_calls = response.get('tool_calls', [])
     tools = []
     for tc in tool_calls:
@@ -83,7 +93,9 @@ def extract_tool_calls(log):
 
 def analyze_token_efficiency(log):
     """Анализирует эффективность использования токенов."""
-    usage = log.get('response', {}).get('usage', {})
+    # `response` бывает null: неуспешный запрос пишет ошибку в `error`.
+    # На таких записях .get('usage') валился с AttributeError.
+    usage = (log.get('response') or {}).get('usage') or {}
     if not usage:
         return None
     prompt = usage.get('prompt_tokens', 0)
