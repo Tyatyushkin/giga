@@ -112,6 +112,111 @@ def analyze_token_efficiency(log):
     }
 
 
+TURN_LIMITS = {
+    "qa-designer": 60,
+    "test-critic": 45,
+    "requirements-analyst": 40,
+    "pytest-stub-writer": 40,
+    "browser-test-writer": 40,
+}
+
+
+def report_problems(logs):
+    """Режимы отказа, которые иначе приходится искать руками.
+
+    Всё, что печатается ниже, было найдено вручную на логе 18.08 — инструмент
+    показывал токены и интервалы, но молчал о том, что 17 % выходного бюджета
+    ушло в ответы без единого символа. Молчание инструмента о сбое читается
+    как отсутствие сбоя, поэтому раздел печатается всегда, даже пустым.
+    """
+    errors, truncated, empty = [], [], []
+    burned = 0
+    total_out = 0
+
+    for log in logs:
+        agent = extract_agent_type(log)
+        ts = str(log.get("timestamp", ""))[11:19]
+        resp = log.get("response")
+        usage = (resp or {}).get("usage") or {}
+        out = usage.get("completion_tokens") or 0
+        total_out += out
+
+        if log.get("error") or not resp:
+            msg = log.get("error")
+            text = (msg or {}).get("message") if isinstance(msg, dict) else str(msg)
+            errors.append((ts, agent, str(text)[:60]))
+            continue
+
+        choice = (resp.get("choices") or [{}])[0] or {}
+        message = choice.get("message") or {}
+        if choice.get("finish_reason") == "length":
+            truncated.append((ts, agent, usage.get("prompt_tokens") or 0, out))
+        if not (message.get("content") or "").strip() and not message.get("tool_calls"):
+            empty.append((ts, agent, out))
+            burned += out
+
+    print("\n🚨 Проблемы")
+
+    print(f"\n   Сетевые отказы и запросы без ответа: {len(errors)}")
+    for ts, agent, text in errors[:10]:
+        print(f"      {ts}  {agent:<26} {text}")
+
+    print(f"\n   Оборвано по длине (finish_reason=length): {len(truncated)}")
+    for ts, agent, pt, out in truncated[:10]:
+        note = "  ← упёрлись в окно контекста" if pt + out > 250000 else ""
+        print(f"      {ts}  {agent:<26} вход {pt:>7}  выход {out:>7}{note}")
+    if truncated:
+        print("      Оборванный ответ дизайнера = недописанный JSON-кейс: линтер объявит его")
+        print("      битым, хотя это сбой инфраструктуры, а не дефект кейса.")
+
+    share = burned / total_out * 100 if total_out else 0
+    print(f"\n   Ответы без текста и без вызовов: {len(empty)}, "
+          f"сожжено {burned:,} выходных токенов ({share:.1f} % выхода)")
+    for ts, agent, out in sorted(empty, key=lambda r: -r[2])[:6]:
+        print(f"      {ts}  {agent:<26} выход {out:>7}")
+
+    if not (errors or truncated or empty):
+        print("      Ни одного — все ответы содержательны.")
+
+
+def report_turn_budget(logs):
+    """Сколько ходов агенты действительно тратят против своих лимитов.
+
+    Ход — один запрос. Сессия опознаётся по тексту задания: первое
+    пользовательское сообщение у GigaCode служебное и одинаково во всех сессиях,
+    поэтому ключ — второе.
+    """
+    import hashlib
+    sessions = {}
+    for log in logs:
+        msgs = (log.get("request") or {}).get("messages") or []
+        users = [str(m.get("content")) for m in msgs if m.get("role") == "user"]
+        if len(users) < 2:
+            continue
+        key = hashlib.sha1(users[1][:600].encode("utf-8")).hexdigest()[:12]
+        rec = sessions.setdefault(key, {"n": 0, "agent": extract_agent_type(log)})
+        rec["n"] += 1
+
+    per = defaultdict(list)
+    for rec in sessions.values():
+        per[rec["agent"]].append(rec["n"])
+
+    print("\n🎚  Расход ходов против лимита")
+    print(f"   {'агент':<28} {'сессий':>7} {'макс':>6} {'медиана':>8} {'лимит':>6}")
+    for agent in sorted(per, key=lambda a: -max(per[a])):
+        lens = sorted(per[agent])
+        mx, med = lens[-1], lens[len(lens) // 2]
+        lim = TURN_LIMITS.get(agent)
+        flag = ""
+        if lim:
+            if mx >= lim:
+                flag = "  ← УПЁРСЯ В ЛИМИТ"
+            elif mx > lim * 0.75:
+                flag = f"  ← {round(100 * mx / lim)} % лимита"
+        print(f"   {agent:<28} {len(lens):>7} {mx:>6} {med:>8} "
+              f"{(lim if lim else '—'):>6}{flag}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Глубокий анализ логов GigaCode")
     ap.add_argument("logs_dir", nargs="?", default=DEFAULT_LOGS_DIR,
@@ -294,24 +399,22 @@ def main():
     
     # 8. Анализ эффективности по фазам
     print(f"\n📊 Анализ по фазам:")
-    phases = {
-        'Phase 1 (requirements-analyst)': [],
-        'Phase 2.5 (qa-designer)': [],
-        'Phase 3 (test-critic)': [],
-        'Phase 4 (pytest-writer)': [],
-        'orchestrator/gate': []
-    }
+    # defaultdict, а не фиксированный словарь: любой агент вне карты — включая
+    # `general-purpose`, `file-search` и «unknown» — ронял разбор по фазам
+    # KeyError'ом, и до этого места отчёт просто обрывался.
+    phases = defaultdict(list)
     phase_map = {
-        'requirements-analyst': 'Phase 1 (requirements-analyst)',
-        'qa-designer': 'Phase 2.5 (qa-designer)',
-        'test-critic': 'Phase 3 (test-critic)',
-        'pytest-writer': 'Phase 4 (pytest-writer)',
-        'orchestrator': 'orchestrator/gate'
+        'requirements-analyst': 'Фаза 1 — аналитик',
+        'qa-designer': 'Фаза 2 — дизайнер',
+        'test-critic': 'Фаза 2 — критик',
+        'pytest-stub-writer': 'Фаза 2.5 — писатель тестов',
+        'browser-test-writer': 'Фаза 2.5 — браузерные тесты',
+        'orchestrator (GigaCode CLI)': 'оркестратор и шлюзы',
     }
     
     for i, log in enumerate(logs):
         agent = extract_agent_type(log)
-        phase = phase_map.get(agent, 'unknown')
+        phase = phase_map.get(agent, f'прочее — {agent}')
         eff = analyze_token_efficiency(log)
         if eff:
             phases[phase].append((i, eff, log))
@@ -319,8 +422,9 @@ def main():
     for phase, reqs in phases.items():
         if not reqs:
             continue
-        total_out = sum(e[1]['completion_tokens'] for _, e, _ in reqs)
-        total_in = sum(e[1]['prompt_tokens'] for _, e, _ in reqs)
+        # e — уже словарь метрик; e[1] индексировал его как последовательность.
+        total_out = sum(e['completion_tokens'] for _, e, _ in reqs)
+        total_in = sum(e['prompt_tokens'] for _, e, _ in reqs)
         avg_out = total_out / len(reqs)
         avg_in = total_in / len(reqs)
         print(f"   {phase:35s}: {len(reqs):3d} req, avg in={avg_in:>8,.0f}, avg out={avg_out:>7,.0f}, total out={total_out:>9,}")
@@ -368,6 +472,12 @@ def main():
             tool_names = [t['name'] for t in prev_tools]
             if any(t in tool_names for t in ['read_file', 'read_many_files', 'glob', 'grep_search']):
                 print(f"   Перед интервалом {gap:.1f}s (#{idx}) был tool: {tool_names}")
+
+    # Разделы ниже печатаются последними намеренно: их читают, даже когда всё
+    # остальное пролистывают.
+    report_turn_budget(logs)
+    report_problems(logs)
+    print()
 
 
 if __name__ == '__main__':

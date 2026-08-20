@@ -62,6 +62,7 @@ Put your own requirements into `input/requirements/` and delete the sample.
 | `/e2e:design J01 [J02 …] [review-path]` | Test cases; several journey ids run in parallel |
 | `/e2e:review J01 [J02 …] [N]` | Review only, one critic per journey, in parallel |
 | `/e2e:status` | Current artefacts, per-journey verdicts, open questions, linter output |
+| `/e2e:profile <log dir>` | Where a finished run spent its tokens and turns, and which requests failed, truncated or returned nothing |
 
 ## Parallel loops
 
@@ -113,12 +114,16 @@ GIGACODE.md             project context loaded into every session
 docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
 templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
 input/requirements/     your source requirements (sample «Звук» included) + _answers.md
+input/requirements-*/   additional corpora, one directory each (knox, kuper)
 output/                 suites/, cases/, reviews/, tests/, state/<journey>.json, state.json,
                         report.md, pending.md (skipped questions), .run (run identity),
                         .previous/ (last run's artefacts)
-scripts/                validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
+scripts/                run: validate_cases.py, check_state.py, review_scope.py, extract_reqs.py,
                         build_gate_questions.py, gate_check.py, include_skill.py,
-                        start_run.py, check_artifacts.py, validate_plans.py
+                        start_run.py, check_artifacts.py, validate_plans.py,
+                        json_to_md.py, extract_journey_context.py, patch_case.py
+                        profiling: analyze_logs_v2.py, profile_qwen_logs.py
+                        migration: build_case_json.py (pre-JSON-primary cases)
 examples/               a fully worked journey plan + case, useful as a reference and smoke test
 ```
 
