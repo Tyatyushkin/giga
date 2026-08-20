@@ -2,17 +2,22 @@
 """Глубокий анализ логов GigaCode v2 — поиск узких мест и оптимизаций."""
 
 import json
+import argparse
 import glob
 import os
 import sys
 from datetime import datetime
 from collections import defaultdict
 
-LOGS_DIR = os.path.dirname(os.path.abspath(__file__))
+# Каталог логов — аргумент, а не место, где лежит сам скрипт. Пока файл лежал
+# в корне репозитория, «рядом с собой» совпадало с «там, где логи»; после переноса
+# в scripts/ он стал искать в scripts/ и молча находить ноль.
+DEFAULT_LOGS_DIR = "."
 
-def load_logs():
+
+def load_logs(logs_dir=DEFAULT_LOGS_DIR):
     """Загружает все JSON логи в хронологическом порядке."""
-    pattern = os.path.join(LOGS_DIR, "openai-*.json")
+    pattern = os.path.join(logs_dir, "openai-*.json")
     files = sorted(glob.glob(pattern))
     logs = []
     for f in files:
@@ -96,14 +101,22 @@ def analyze_token_efficiency(log):
 
 
 def main():
+    ap = argparse.ArgumentParser(description="Глубокий анализ логов GigaCode")
+    ap.add_argument("logs_dir", nargs="?", default=DEFAULT_LOGS_DIR,
+                    help="каталог с файлами openai-*.json (по умолчанию текущий)")
+    args = ap.parse_args()
+
     print("=" * 80)
     print("GigaCode Logs Analysis v2 — Deep Dive")
     print("=" * 80)
-    
-    logs = load_logs()
+
+    logs = load_logs(args.logs_dir)
     if not logs:
-        print("❌ Логи не найдены")
-        return
+        # Пустой результат обязан отличаться от успешного: код 2 и путь в сообщении,
+        # иначе «логов нет» читается как «всё в порядке, просто нечего сказать».
+        print(f"❌ Логи не найдены: {os.path.join(args.logs_dir, 'openai-*.json')}",
+              file=sys.stderr)
+        return 2
     
     total_requests = len(logs)
     print(f"\n📊 Всего запросов: {total_requests}")
@@ -346,4 +359,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main() or 0)
