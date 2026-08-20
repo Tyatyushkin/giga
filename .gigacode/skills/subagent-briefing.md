@@ -31,7 +31,7 @@ description: Что обязано быть в промпте каждого п�
 | `qa-designer` | план `output/suites/<JOURNEY_ID>.md`; пути требований; `docs/format.md`, `templates/test-case.md`; выход `output/cases/<JOURNEY_ID>/`; граница владения; на фикс-итерации — путь ревью и формулировка ниже |
 | `test-critic` | номер итерации `<N>` — его ведёт оркестратор, критик его не выбирает; кейсы `output/cases/<JOURNEY_ID>/`; план сьюты; пути требований; `docs/critic-rubric.md`, `docs/quality-criteria.md`, `docs/format.md`; выход ревью `output/reviews/<JOURNEY_ID>-iter<N>.md`; выход состояния `output/state/<JOURNEY_ID>.json`; запрет писать `output/state.json`; указание сначала прогнать `scripts/validate_cases.py` и слить его находки |
 | `pytest-stub-writer` | план сьюты; кейсы `.md` и `.json`; последнее ревью; выход `output/tests/<JOURNEY_ID>/`; граница владения |
-| `browser-test-writer` | то же, что писателю заглушек, плюс `base_url`; граница владения |
+| `browser-test-writer` | то же, что писателю заглушек, плюс адрес стенда и адрес Selenium-сервера — они уходят в `E2E_BASE_URL` и `E2E_SELENIUM_URL`, а не в код теста; граница владения |
 
 Отсутствующий пункт — это не мелочь: агент не спросит, он додумает.
 
