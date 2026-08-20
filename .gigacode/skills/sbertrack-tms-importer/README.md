@@ -1,17 +1,41 @@
-## 1. Настроить и поднять mcp сервер sbertrack-mcp
-https://sc-ci.sber.ru/sc/InSourceHub_AI/ai_market/src/branch/master/mcp/sbertrack-mcp
+# SberTrack TMS Importer
 
+> **Импорт E2E тест-кейсов из Markdown в SberTrack TMS через MCP-сервер**
 
-## 2. Пример подключения к sbertrack-mcp в settings.json:
+---
+
+## 🚀 Быстрый старт
+
+### 1. Запуск MCP-сервера
+
+Поднимите локальный MCP-сервер `sbertrack-mcp`:
+
+📂 [исходный код](https://sc-ci.sber.ru/sc/InSourceHub_AI/ai_market/src/branch/master/mcp/sbertrack-mcp)
+
+### 2. Настройка подключения
+
+Добавьте конфигурацию в `settings.json`:
 
 ```json
-   "sbertrack_tsm": {
-   "httpUrl": "http://0.0.0.0:8080/mcp?scopes=issues,test_units,tms"
-   }
-   ```
+{
+  "sbertrack_tms": {
+    "httpUrl": "http://0.0.0.0:8080/mcp?scopes=issues,test_units,tms"
+  }
+}
+```
 
-## 3. Для импорта тестов в тест культура использовать скилл: [sbertrack-tms-importer](.gigacode%2Fskills%2Fsbertrack-tms-importer)
-На вход скиллу дать кейсы и код пространства в sbertrack.
+### 3. Импорт тест-кейсов
 
-В этом репозитории кейсы лежат в `output/cases/<JOURNEY_ID>/TC-*.json` — это первичный формат,
-Markdown из него порождается. Markdown на вход не нужен.
+Используйте этот скилл для загрузки тест-кейсов в SberTrack. На вход подайте:
+
+- **Markdown-файлы** E2E тест-кейсов (формат: `ID`, `Название`, `Предусловия`, таблица `Шаги` и т.д.)
+- **Код пространства** в SberTrack (например, `TSTQ`, `INSHUB`)
+
+---
+
+## 📚 Документация
+
+| Файл | Описание |
+|---|---|
+| [SKILL.md](SKILL.md) | Полный workflow, парсинг Markdown → JSON, маппинг полей, примеры |
+| [testcase-schema.json](testcase-schema.json) | JSON-схема формата тест-кейса для TMS API |
