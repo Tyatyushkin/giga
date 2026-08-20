@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TMS Test Case",
+  "description": "Структура тест-кейса для создания через SberTrack TMS API",
+  "type": "object",
+  "required": ["space_code", "summary"],
+  "properties": {
+    "space_code": {
+      "type": "string",
+      "description": "Код пространства в TMS (например, INSHUB, TSTQ)"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "description": "Название тест-кейса"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 10000,
+      "description": "Предусловия и контекст тест-кейса (markdown)"
+    },
+    "folder": {
+      "type": "string",
+      "description": "Код папки TMS. Если не указан, автоматически подставляется <space_code>_test_case"
+    },
+    "type_of_testing": {
+      "type": "string",
+      "enum": ["new", "regress"],
+      "default": "new",
+      "description": "Вид тестирования"
+    },
+    "test_case_status": {
+      "type": "string",
+      "enum": ["draft", "on_acceptance", "actual"],
+      "description": "Статус тест-кейса"
+    },
+    "link_to": {
+      "type": "string",
+      "pattern": "^[A-Z]+-\\d+$",
+      "description": "Ключ исходной задачи в SberTrack/Jira (например, INSHUB-124)"
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Метка тест-кейса"
+    },
+    "steps": {
+      "type": "array",
+      "description": "Шаги тест-кейса",
+      "items": {
+        "$ref": "#/definitions/step"
+      }
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Дополнительные атрибуты тест-кейса",
+      "properties": {
+        "test_level": {
+          "type": "string",
+          "description": "Уровень теста (unit, integration, system, regression...)"
+        },
+        "test_case_negative": {
+          "type": "boolean",
+          "description": "Является ли тест-кейс негативным"
+        },
+        "automated": {
+          "type": "boolean",
+          "description": "Автоматизирован ли тест-кейс"
+        },
+        "kritregress": {
+          "type": "boolean",
+          "description": "Критический регресс-тест"
+        },
+        "test_type": {
+          "type": "string",
+          "description": "Вид теста (manual, automatic, mixed)"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^\\d+$",
+          "description": "Логин или код владельца (user code)"
+        },
+        "estimate": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Трудозатраты"
+        },
+        "product_code": {
+          "type": "string",
+          "description": "Код продукта"
+        },
+        "component_code": {
+          "type": "string",
+          "description": "Код компонента"
+        },
+        "sber_configuration_item": {
+          "type": "string",
+          "description": "Конфигурационный элемент СБЕР"
+        },
+        "old_jira_key": {
+          "type": "string",
+          "pattern": "^[A-Z]+-\\d+$",
+          "description": "Ключ задачи в Jira до миграции"
+        },
+        "precondition": {
+          "type": "string",
+          "description": "Предустановление тест-кейса"
+        },
+        "premigration_author": {
+          "type": "string",
+          "description": "Автор до миграции"
+        },
+        "framework_test_new": {
+          "type": "string",
+          "description": "Используемый фреймворк тестирования"
+        },
+        "autotest_hash": {
+          "type": "string",
+          "description": "Hash автотеста"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "step": {
+      "type": "object",
+      "description": "Один шаг тест-кейса",
+      "required": ["description"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Описание шага (обязательное поле)"
+        },
+        "data": {
+          "type": "string",
+          "description": "Тестовые данные для шага"
+        },
+        "result": {
+          "type": "string",
+          "description": "Ожидаемый результат выполнения шага"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

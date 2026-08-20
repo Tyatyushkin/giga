@@ -111,6 +111,8 @@ every question it would have asked in `output/pending.md`; the final phase folds
                         `!{python3 scripts/include_skill.py <name> --level N}`
 conftest.py             registers the J<NN> journey markers from output/tests/ dirs
 GIGACODE.md             project context loaded into every session
+.gigacode/skills/       procedure skills as flat .md, injected by include_skill.py;
+                        capability skills as directories with SKILL.md (sbertrack-tms-importer)
 docs/                   format.md, quality-criteria.md, critic-rubric.md, examples.md
 templates/              suite-plan.md, test-case.md, test-case.json, review-report.md
 input/requirements/     your source requirements (sample «Звук» included) + _answers.md
