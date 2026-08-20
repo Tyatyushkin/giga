@@ -8,6 +8,9 @@ output/gate/
 output/tests/
 output/state.json
 output/report.md
+output/.previous/
+output/.run
+output/pending.md
 
 input/requirements/_answers.md
 
@@ -16,6 +19,7 @@ logs/
 
 __pycache__/
 *.pyc
+.DS_Store
 
 # Артефакты прогона pytest — порождаются запуском, в репозиторий не входят
 allure-results/
