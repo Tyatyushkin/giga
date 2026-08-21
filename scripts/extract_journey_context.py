@@ -19,9 +19,58 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
+
+
+DEFAULT_ANSWERS = "input/requirements/_answers.md"
+
+
+def load_answers(path):
+    """Ответы человека из `_answers.md`, разобранные тем же кодом, что и extract_reqs.
+
+    Индекс аналитика пишется ДО шлюза, а на шлюзе человек отвечает — поэтому
+    вопрос, закрытый ответом, остаётся в индексе открытым. Контекст, собранный
+    из такого индекса, ведёт агента по отменённой развилке: в прогоне 12
+    дизайнера спасло только то, что бриф отдельно велел читать `_answers.md`,
+    а критик написал, что следующий на его месте выпишет ложный BLOCKER.
+    """
+    src = Path(path)
+    if not src.is_file():
+        return []
+    spec = importlib.util.spec_from_file_location(
+        "extract_reqs", Path(__file__).with_name("extract_reqs.py"))
+    try:
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.parse_answers(src)
+    except Exception:
+        return []
+
+
+def norm(text):
+    return " ".join(str(text or "").lower().replace("«", "").replace("»", "").split())
+
+
+def find_answer(question, answers):
+    """Ответ, закрывающий вопрос, — **только по тексту вопроса**.
+
+    По id сопоставлять нельзя, и это проверено на живом прогоне: локальные id
+    у каждого прохода свои, поэтому «Q-01» второго прохода (что наблюдается при
+    вводе истёкшего кода) совпал по id с «Q-01» первого (поддерживается ли
+    перестановка треков) и получил чужой ответ. Текст вопроса ответ цитирует
+    дословно — это единственная связь, переживающая перенумерацию.
+    """
+    body = norm(question.get("question"))
+    if len(body) < 40:
+        return None                      # слишком коротко, чтобы совпадение что-то значило
+    probe = body[:120]
+    for a in answers:
+        if probe in norm(a.get("question")):
+            return a
+    return None
 
 
 def belongs_to(entry: dict, jid: str) -> bool:
@@ -41,7 +90,12 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="extract for every journey")
     ap.add_argument("--index", default="output/suites/_index.json")
     ap.add_argument("--out-dir", default="output/suites")
+    ap.add_argument("--answers", default=DEFAULT_ANSWERS,
+                    help="файл ответов человека; вопросы, закрытые им, помечаются "
+                         "answered даже если индекс аналитика писался до шлюза")
     args = ap.parse_args()
+
+    answers = load_answers(args.answers)
 
     index_path = Path(args.index)
     if not index_path.is_file():
@@ -85,17 +139,22 @@ def main() -> int:
             for g in gaps_all
             if belongs_to(g, jid)
         ]
-        own_questions = [
-            {
+        own_questions = []
+        resolved_here = 0
+        for q in questions_all:
+            if not belongs_to(q, jid):
+                continue
+            hit = find_answer(q, answers)
+            if hit:
+                resolved_here += 1
+            own_questions.append({
                 "id": q["id"],
                 "question": q["question"],
                 "blocks": q.get("blocks", []),
-                "answered": q.get("answered", False),
-                "answer": q.get("answer"),
-            }
-            for q in questions_all
-            if belongs_to(q, jid)
-        ]
+                "answered": bool(hit) or q.get("answered", False),
+                "answer": hit.get("answer") if hit else q.get("answer"),
+                "answeredBy": hit.get("id") if hit else None,
+            })
 
         if gaps_all and not own_gaps:
             sys.stderr.write(
@@ -122,9 +181,10 @@ def main() -> int:
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        closed = f", закрыто ответами: {resolved_here}" if resolved_here else ""
         print(
             f"[context] {jid}: {len(own_reqs)} REQ, "
-            f"{len(own_gaps)} gaps, {len(own_questions)} questions → {out_path}"
+            f"{len(own_gaps)} gaps, {len(own_questions)} questions{closed} → {out_path}"
         )
 
     return 0
