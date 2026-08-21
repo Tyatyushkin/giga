@@ -62,6 +62,25 @@ MIN_AREAS = 3
 STAGE_SPREAD = 2.0
 VARIANT_SPREAD = 3.0
 
+# Сколько времени дизайнера стоит journey. Замер по восьми вызовам дизайнера
+# прогонов 7–13 (result.md § 16): время держится на кейсах, а не на этапах.
+#
+#   единица   корреляция   удельное время   коэффициент вариации
+#   кейсы        +0.90        141 с/кейс           19 %
+#   шаги         +0.84         27 с/шаг            27 %
+#   этапы        см. ниже      96 с/этап           34 %
+#
+# По этапам корреляцию считать нельзя: семь наблюдений из восьми — ровно 8 этапов,
+# потому что MAX_STAGES прижал к потолку все планы. Величина без разброса не годится
+# основанием для бюджета, и это главный вывод замера: считать нужно от кейсов.
+SECONDS_PER_CASE = 141
+# Кейсов на одного дизайнера, выше которых journey стоит резать или раздавать
+# вариантных писателей (O-15). 10 кейсов ≈ 23 минуты одного агента: столько же —
+# окно, в котором сбой стоит дороже всего, а расход ходов подбирается к лимиту.
+# Наблюдалось 3, 4, 4, 4, 6, 7, 7, 9 — порог выше всех с запасом, как и положено
+# потолку: он страхует от разрастания, а не навязывает размер.
+MAX_CASES = 10
+
 
 def check(index: Path) -> tuple[list[dict], list[dict], list[str]]:
     """(findings derived here, warnings passed through from the analyst, one-line shapes)."""
@@ -107,7 +126,16 @@ def check(index: Path) -> tuple[list[dict], list[dict], list[str]]:
         # inflate the number the human is asked to judge.
         for w in (j.get("warnings") or []):
             passed.append({"scope": jid, "rule": "analyst-warning", "text": str(w)})
-        notes.append(f"{jid}: этапов {stages}, областей {areas}, вариантов {variants}")
+        # Кейсов у journey — основной плюс по одному на вариант.
+        cases = variants + 1
+        minutes = cases * SECONDS_PER_CASE / 60
+        if cases > MAX_CASES:
+            findings.append({"scope": jid, "rule": "cases-above-ceiling",
+                             "text": f"кейсов {cases} при потолке {MAX_CASES} — "
+                                     f"около {minutes:.0f} мин одного дизайнера. "
+                                     "Разрезать journey либо раздать вариантных писателей"})
+        notes.append(f"{jid}: этапов {stages}, областей {areas}, вариантов {variants}, "
+                     f"кейсов {cases} ≈ {minutes:.0f} мин дизайнера")
 
     if len(journeys) > 1:
         st = [j["stages"] for j in journeys if isinstance(j.get("stages"), int)]
