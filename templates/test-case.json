@@ -8,7 +8,11 @@
   "requirements": [],
   "preconditions": [],
   "testData": [
-    { "name": "", "value": "", "comment": "" }
+    {
+      "name": "",
+      "value": "",
+      "comment": ""
+    }
   ],
   "steps": [
     {
@@ -20,6 +24,16 @@
     }
   ],
   "postconditions": [],
-  "gaps": [],
-  "clarifyingQuestions": []
+  "gaps": [
+    {
+      "id": "G-01",
+      "text": ""
+    }
+  ],
+  "clarifyingQuestions": [
+    {
+      "id": "Q-01",
+      "text": ""
+    }
+  ]
 }

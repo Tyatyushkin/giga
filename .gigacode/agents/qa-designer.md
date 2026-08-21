@@ -132,6 +132,11 @@ branch point, and states its own deviation from that point on. It never re-descr
   не задан (пробел N, вопрос M) и на шаге не проверяется». See `docs/critic-rubric.md`, «Код
   ответа — это реакция системы».
 - **No vague results.** If you cannot name an observable, the step is not testable yet: raise a gap.
+- **Give every gap and question an `id`, and cite it by id.** `{"id": "G-03", "text": …}` —
+  the plan's id when the gap comes from the plan, `G-<journey>-<n>` when you found it yourself.
+  A step then reads «…требованиями не задано (G-03, Q-03)». Numbering by position breaks
+  silently: insert one question and every reference after it points at the wrong thing, while
+  the text still reads plausibly. The linter checks that a citation resolves (`ref-dangling`).
 - Headings, field names and column names exactly as in `docs/format.md`. Russian.
 
 ## Fix iterations

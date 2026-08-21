@@ -160,16 +160,40 @@ def _test_data_table(data):
     return "\n".join(lines) + "\n"
 
 
+def _entry(item, fallback_id):
+    """Пробел или вопрос: `{"id": …, "text": …}` либо просто строка.
+
+    Позиционная нумерация — источник целого класса дефектов: номер «пробел 3»
+    живёт в тексте шага, а сам пробел нумеруется местом в массиве, поэтому
+    вставка одного элемента молча ломает все ссылки после него. Явный id
+    убирает класс: ссылаться становится не на позицию, а на имя.
+
+    Строка принимается ради кейсов, написанных до введения id; тогда id
+    подставляется позиционный, и поведение остаётся прежним.
+    """
+    if isinstance(item, dict):
+        return str(item.get("id") or fallback_id), str(item.get("text", "")).strip()
+    return fallback_id, str(item).strip()
+
+
 def _gaps_list(gaps):
     if not gaps:
         return "Не выявлены.\n"
-    return "\n".join(f"- {g}" for g in gaps) + "\n"
+    lines = []
+    for i, g in enumerate(gaps, start=1):
+        gid, text = _entry(g, f"G-{i}")
+        lines.append(f"- **{gid}.** {text}" if isinstance(g, dict) else f"- {text}")
+    return "\n".join(lines) + "\n"
 
 
 def _questions_list(questions):
     if not questions:
         return "Не выявлены.\n"
-    return "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions)) + "\n"
+    lines = []
+    for i, q in enumerate(questions, start=1):
+        qid, text = _entry(q, f"Q-{i}")
+        lines.append(f"{i}. **{qid}.** {text}" if isinstance(q, dict) else f"{i}. {text}")
+    return "\n".join(lines) + "\n"
 
 
 def _requirements_line(reqs):

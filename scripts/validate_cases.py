@@ -587,6 +587,32 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
                         "Либо привязать их к шагам через steps[].requirements, либо убрать "
                         "из requirements — иначе кейс заявляет покрытие, которого не даёт")
 
+            # --- ссылки из шагов на пробелы и вопросы -----------------------
+            # Позиционная нумерация ломается молча: вставка одного вопроса
+            # сдвигает все последующие, а ссылки в шагах остаются старыми.
+            # Шесть из семи MINOR прогона 8 были ровно этим.
+            gap_ids = entry_ids(case_json.get("gaps"), "G")
+            q_ids = entry_ids(case_json.get("clarifyingQuestions"), "Q")
+            dangling = []
+            for i, st in enumerate(case_json.get("steps", []) or [], start=1):
+                if not isinstance(st, dict):
+                    continue
+                blob = " ".join(str(st.get(k, "")) for k in
+                                ("action", "testData", "expectedResult"))
+                for kind, num in REF_POSITIONAL.findall(blob):
+                    pool = gap_ids if kind.lower().startswith("проб") else q_ids
+                    if num not in pool:
+                        dangling.append((i, f"{kind} {num}"))
+                for ref in REF_BY_ID.findall(blob):
+                    pool = gap_ids if ref.upper().startswith("G") else q_ids
+                    if ref not in pool:
+                        dangling.append((i, ref))
+            for step_no, ref in dangling[:6]:
+                add("MAJOR", "ref-dangling", f"Шаги / шаг {step_no}",
+                    f"Ссылка «{ref}» не соответствует ни одному пробелу или вопросу кейса",
+                    "Сослаться на существующий id — или завести недостающий пробел. "
+                    "Позиционные номера ломаются при вставке: дайте элементам явные id")
+
         if expected is not None and expected != text:
             add("BLOCKER", "md-stale", str(path.name),
                 "Markdown не совпадает с тем, что даёт конвертер из JSON — "
@@ -700,6 +726,24 @@ def referenced_names(json_path: Path) -> set[str]:
             if isinstance(cell, str):
                 names.update(m.group(1).strip() for m in TESTDATA_REF.finditer(cell))
     return names
+
+
+# Ссылка из шага на пробел или вопрос. Ловим обе формы: старую позиционную
+# («пробел 3», «вопрос 2») и новую по идентификатору («G-03», «Q-J02-1»).
+REF_POSITIONAL = re.compile(r"\b(пробел|вопрос)\s+(\d{1,2})\b", re.I)
+REF_BY_ID = re.compile(r"\b([GQ]-[A-Za-z0-9-]{1,12})\b")
+
+
+def entry_ids(items, letter):
+    """Идентификаторы пробелов или вопросов кейса — явные, если они есть."""
+    ids = set()
+    for i, item in enumerate(items or [], start=1):
+        if isinstance(item, dict) and item.get("id"):
+            ids.add(str(item["id"]))
+        else:
+            ids.add(f"{letter}-{i}")          # позиционный запасной вариант
+            ids.add(str(i))
+    return ids
 
 
 def orphan_json(target: Path) -> list[Path]:
