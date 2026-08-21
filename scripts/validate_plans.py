@@ -42,6 +42,20 @@ for _stream in (sys.stdout, sys.stderr):
 MIN_STAGES = 5
 # Ceiling: 8 stages at the observed 2.9 steps/stage is a ~23-step main case, about the
 # 15-minute designer we are comfortable with. Soft — see the module docstring.
+#
+# CONTRADICTION, unresolved on purpose. validate_cases.MAX_STEPS_PER_STAGE = 2 calls
+# any density above 2.0 a finding, while the sentence above justifies this ceiling by
+# assuming 2.9. Both were written the same day and they cannot both be right.
+#
+# Run 12 showed which way it bites: on a UI corpus two of three plans landed on 7-8
+# stages — this ceiling — and their main cases then tripped the step rule at 2.29 and
+# 2.50. The bundled stages were the cause, and this ceiling is what pushes an analyst
+# to bundle. The Звук reference in examples/ declares twelve stages for nineteen steps
+# and is the shape both rules would accept; it predates this ceiling.
+#
+# Do not resolve by guessing a new number. What decides it is which quantity actually
+# tracks designer time and review cost — stages or steps — and that is measurable from
+# the logs we now collect. See TODO, «Противоречие двух потолков».
 MAX_STAGES = 8
 MIN_AREAS = 3
 # Ratios above which the journeys of one run are uneven enough to waste parallelism.

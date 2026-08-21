@@ -112,6 +112,14 @@ MIN_MAIN_STEPS = 8
 # (the Звук reference in examples/). Two is above all four with margin, so the rule
 # guards against runaway expansion instead of enforcing a house style — the floor had
 # no counterpart until three runs turned 8 stages into 10, 11 and 14 steps.
+#
+# Run 12 fired it twice on a UI corpus and the diagnosis is worth keeping: the defect
+# was in the plans, not here. The Звук reference is the same UI corpus and is *more*
+# granular per action, staying at 1.58 only because its plan declares twelve stages.
+# The plans that tripped the rule bundle three or four user actions into one stage,
+# which is what MAX_STAGES=8 in validate_plans.py pushes an analyst toward. The two
+# ceilings interact: cap the stages and the density has nowhere to go but up. Before
+# raising this number, look at whether the stage ceiling is the thing to revisit.
 MAX_STEPS_PER_STAGE = 2
 
 MIN_EXPECTED_LEN = 20
@@ -412,8 +420,10 @@ def check_case(path: Path, findings: list[Finding], stages: int | None = None) -
             add("MAJOR", "steps-too-many", "Шаги",
                 f"В основном кейсе {len(step_rows)} шагов на {stages} этапов плана "
                 f"({len(step_rows) / stages:.2f} на этап), потолок {ceiling}",
-                "Свести шаги, дробящие одно наблюдаемое, обратно в один шаг — "
-                "или обосновать этапами: потолок считается от плана")
+                "Сначала проверьте план: этап, несущий три-четыре действия, — самая "
+                "частая причина. Разделить такие этапы поднимает потолок и не трогает "
+                "шаги. Только если каждый этап уже одно действие — сводить шаги, "
+                "дробящие одно наблюдаемое")
 
     steps_text = " ".join(" ".join(r) for r in step_rows).lower()
     # Markdown markers stripped for substring matching below: a value written as
