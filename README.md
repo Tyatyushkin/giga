@@ -62,6 +62,7 @@ Put your own requirements into `input/requirements/` and delete the sample.
 | `/e2e:design J01 [J02 …] [review-path]` | Test cases; several journey ids run in parallel |
 | `/e2e:review J01 [J02 …] [N]` | Review only, one critic per journey, in parallel |
 | `/e2e:status` | Current artefacts, per-journey verdicts, open questions, linter output |
+| `/e2e:add [path] [--name <corpus>]` | Take requirements, save them under their own input/requirements-<name>/, check the factory can read them, and ask whether to run |
 | `/e2e:profile <log dir>` | Where a finished run spent its tokens and turns, and which requests failed, truncated or returned nothing |
 
 ## Parallel loops
