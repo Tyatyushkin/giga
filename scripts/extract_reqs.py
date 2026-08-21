@@ -173,7 +173,10 @@ def as_markdown(records: list[dict]) -> str:
 
 
 # `## 3. Q-03: <заголовок>` — нумерация раздела необязательна, id обязателен.
-ANSWER_HEADING = re.compile(r"^##\s+(?:\d+\.\s*)?(Q-\d+)\s*[:.\-]?\s*(.*)$")
+# Заголовок ответа: `## 3. Q-03: …`, `## 13. G-01 (довесок к Q-04): …`.
+# Раньше принимался только `Q-\d+`, и ответ, озаглавленный по пробелу, молча
+# терялся — 12 разобранных из 13 объявленных, без единого слова в stderr.
+ANSWER_HEADING = re.compile(r"^##\s+(?:\d+\.\s*)?([A-Z]{1,4}-\d+)\s*[:.\-(]?\s*(.*)$")
 # `**Ответ продукта (выбран):** …` — жирным может быть обёрнуто и двоеточие.
 ANSWER_MARK = re.compile(r"^\s*\*\*\s*Ответ[^*]*\*\*\s*:?\s*(.*)$")
 QUESTION_MARK = re.compile(r"^\s*>\s*Вопрос\s*:?\s*(.*)$")
@@ -270,6 +273,16 @@ def main() -> int:
             sys.stderr.write(f"extract_reqs: файла ответов нет: {answers_path}\n")
             return 2
         answers = parse_answers(answers_path)
+        # Полная потеря ловится ниже, частичная — здесь: заголовков в файле больше,
+        # чем разобранных ответов, значит какой-то формат регулярка не знает.
+        headings = sum(1 for line in answers_path.read_text(encoding="utf-8").splitlines()
+                       if line.startswith("## "))
+        if answers and headings > len(answers):
+            sys.stderr.write(
+                f"extract_reqs: в {answers_path} разделов «## » {headings}, "
+                f"а разобрано ответов {len(answers)} — часть заголовков не распознана. "
+                "Ответы человека равны требованиям, потерять часть нельзя\n"
+            )
         if not answers:
             sys.stderr.write(
                 f"extract_reqs: в {answers_path} не разобран ни один ответ — ожидается "
